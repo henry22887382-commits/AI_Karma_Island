@@ -1,0 +1,17 @@
+id,category,missing_value,should_not_invent
+M-01,main_map,RESOLVED: 28 Node IDs visual types and 51 edges; remaining: some per-node labels / coconut beach IDs,true
+M-02,loot_tables,"MAIN TABLES RECOVERED: 9 monsters / 7 containers / 20 category subpools; pending: provisional one-item interpretation, item IDs, other independent sources",true
+M-03,library_text,100+ original note/book texts,true
+M-04,surface_events,"Forest boar stats recovered by new design as goat-level (HP10/DEF0/SPD2, attack 1:50%,2:35%,3:15%); missing its encounter odds, beach-wave odds, river-entry odds; rock 5/5/90 confirmed",true
+C-01,dungeon_events,third floor outside first row missing 8% redistribution,true
+C-02,messages,public visibility radius and all-island vs node,true
+C-03,equipment,bottom item names 4-vs-3 level mismatch,true
+C-04,equipment,two-handed and some hero speed modifiers,true
+C-05,combat,dragon 22–24 and 20–22 detailed weights,true
+C-06,combat,lava splash 4–6 damage detailed weights,true
+C-07,boss2,retreat and hit/breach rules,true
+C-08,boss1,flight taunt timing translated to async schedule,true
+C-17,surface_exploration,"RESOLVED: user confirmed rock resource pool magic stone 5%, chest 5%, nothing 90%; historic 15/15/70 superseded; current day/night environmental hazards unchanged",false
+C-18,item_id_migration,recovered item names vs equipment.csv aliases (破木劍/破損木劍; 鐵槍/鐵矛 etc.) require explicit mapping,true
+C-19,container_quantity,one item per container wording was provisional (暫定),true
+M-05,wildlife_spawn,RESOLVED spawn scope: night bats and wolves across all nodes without lit campfire; campfire only safety; missing individual encounter odds and boar spawn odds,true

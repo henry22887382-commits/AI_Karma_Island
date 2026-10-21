@@ -1,0 +1,9 @@
+action,result_or_hazard,probability_percent,effect,role,status,compatibility
+森林採野莓,有益野果,80,取得有益野果,result,recovered_source_no_known_conflict,可作森林採集的獨立主池
+森林採野莓,無收穫,20,無,result,recovered_source_no_known_conflict,同上
+岩縫探索（早期摘錄）,魔法石,15,取得魔法石,result,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險
+岩縫探索（早期摘錄）,寶箱,15,取得寶箱,result,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險
+岩縫探索（早期摘錄）,無收穫,70,無,result,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險
+岩縫探索（早期摘錄）,HP損失,15,-1HP,hazard,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險
+狩獵山羊（早期摘錄）,額外受傷,10,-1HP,hazard,recovered_source_semantics_unverified,原文10%扣1心；是否在戰鬥外獨立判定不明
+狩獵山羊（早期摘錄）,勝利,,取得肉；第一層強度戰鬥,battle_result,recovered_source_no_known_conflict,獵殺成功取得肉，與一般狩獵設定相容

@@ -1,0 +1,11 @@
+location_action,result_or_hazard,probability_percent,is_independent_roll,outcome,status
+河流探索,普通魚,20,no,fullness+3,summary_verified
+河流探索,名鮭魚,5,no,fullness+4,summary_verified
+河流探索,無魚,75,no,none,summary_verified
+夜間河流潛水,夜熊,5,yes_or_Q_to_verify,battle,summary_verified
+岩石探索,魔法石,5,no,upgrade_material,summary_verified
+岩石探索,寶箱,5,no,container,summary_verified
+岩石探索,無收穫,90,no,none,summary_verified
+岩石探索_白天,HP損失,20,yes,hp-2,summary_verified
+岩石探索_夜間,HP損失,40,yes,hp-2,summary_verified
+岩石探索_夜間,睡眠損失,25,yes,sleep-1,summary_verified

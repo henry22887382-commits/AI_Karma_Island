@@ -1,0 +1,21 @@
+# Dependencies and generated state
+**/node_modules/
+island-sim/.playwright-cli/
+island-sim/data/
+island-sim/qa/
+
+# Local credentials and private transfer material
+.env
+.env.*
+!.env.example
+**/*.key
+**/*secret*
+cookie-work/transfer.json
+cookie-work/helpers/
+
+# Local caches and editor state
+**/.cache/
+**/.codex/
+**/.aws/
+**/.vscode/
+**/.idea/

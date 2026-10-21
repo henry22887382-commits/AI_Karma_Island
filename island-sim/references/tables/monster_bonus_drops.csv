@@ -1,0 +1,10 @@
+floor,monster,紙筆_percent,告示牌_percent,炸彈_percent,營火_percent,extra_drop_total_percent,no_extra_drop_percent,status,note
+1,巨蟒,20,15,0,0,35,65,recovered_user_source,每項百分比為每次擊殺的總機率
+1,綠矮人,20,20,0,0,40,60,recovered_user_source,每項百分比為每次擊殺的總機率
+1,食人花,35,0,0,0,35,65,recovered_user_source,每項百分比為每次擊殺的總機率
+2,管道巨鼠,20,0,15,0,35,65,recovered_user_source,每項百分比為每次擊殺的總機率
+2,黏液怪,0,30,0,5,35,65,recovered_user_source,每項百分比為每次擊殺的總機率
+2,大大水豚,30,0,0,5,35,65,recovered_user_source,每項百分比為每次擊殺的總機率
+3,火蜥蜴,0,0,50,0,50,50,recovered_user_source,勇者劍若不在世界中則另有保證掉落，不計入本額外池
+3,熔岩史萊姆,0,20,20,0,40,60,recovered_user_source,每項百分比為每次擊殺的總機率
+3,火翼蝙蝠,20,0,20,0,40,60,recovered_user_source,每項百分比為每次擊殺的總機率
