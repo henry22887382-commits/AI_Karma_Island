@@ -25,6 +25,17 @@ test('compares higher sleep resource before attack, defense and empty inventory 
   assert.equal(compareSameSpeed(stats('space', { emptySlots: 10 }), stats('full', { emptySlots: 0 })).winnerId, 'space');
 });
 
+test('skips metrics that are absent for one or both actors and compares the remaining shared metrics', () => {
+  assert.equal(compareSameSpeed(
+    stats('monster', { hunger: null, sleep: null, attack: null, emptySlots: null, hitPoints: 12 }),
+    stats('monster-higher-hp', { hunger: null, sleep: null, attack: null, emptySlots: null, hitPoints: 13 }),
+  ).winnerId, 'monster-higher-hp');
+  assert.equal(compareSameSpeed(
+    stats('no-metrics-a', { hitPoints: null, hunger: null, sleep: null, attack: null, defense: null, emptySlots: null }),
+    stats('no-metrics-b', { hitPoints: null, hunger: null, sleep: null, attack: null, defense: null, emptySlots: null }),
+  ).tied, true);
+});
+
 test('uses seeded Fisher-Yates draws and captures replay material for a fully tied group', () => {
   const actors = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
   const metrics = new Map(actors.map(({ id }) => [id, stats(id)]));

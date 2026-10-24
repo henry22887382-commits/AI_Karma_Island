@@ -1,8 +1,9 @@
-location_action,result_or_hazard,probability_percent,is_independent_roll,outcome,status
+﻿location_action,result_or_hazard,probability_percent,is_independent_roll,outcome,status
 河流探索,普通魚,20,no,fullness+3,summary_verified
 河流探索,名鮭魚,5,no,fullness+4,summary_verified
-河流探索,無魚,75,no,none,summary_verified
-夜間河流潛水,夜熊,5,yes_or_Q_to_verify,battle,summary_verified
+河流探索,無收穫,75,no,none,user_confirmed_2026-10-22
+河流探索_白天,河流夜熊,5,yes,battle,user_confirmed_independent_encounter
+河流探索_夜間,河流夜熊,15,yes,battle,user_confirmed_independent_encounter
 岩石探索,魔法石,5,no,upgrade_material,summary_verified
 岩石探索,寶箱,5,no,container,summary_verified
 岩石探索,無收穫,90,no,none,summary_verified

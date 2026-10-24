@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { loadIslandGraph } from '../content/island.ts';
+import { loadSimulationActionContent } from '../content/actions.ts';
 import { createInitialWorld } from '../engine/world.ts';
 import { nextWorldEvent } from '../engine/simulation.ts';
 import { SQLiteWorldStore } from '../persistence/sqlite-store.ts';
@@ -27,6 +28,39 @@ test('unconfigured next resident is paused before any provider request or world 
     assert.equal(store.readSnapshot()?.sequence, 0);
     assert.equal(requests, 0);
     assert.match(runner.getState().status, /尚未完成模型與金鑰設定/);
+  } finally {
+    store.close();
+    settings.close();
+  }
+});
+
+test('runner automatically settles the scheduled monster turn without requesting an AI decision', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const actionContent = await loadSimulationActionContent(sourceTables);
+  const store = SQLiteWorldStore.open(':memory:');
+  const settings = new ModelSettingsStore(new DatabaseSync(':memory:'));
+  const secrets = new ProcessModelSecrets();
+  const initial = createInitialWorld(graph, { seed: 'runner-monster-automatic', contentVersion: 'test-source' });
+  const resident = Object.values(initial.actors).find((actor) => actor.alive);
+  assert.ok(resident?.nodeId);
+  const monster = {
+    id: 'monster-runner-test', actorType: 'monster' as const, alive: true, nodeId: resident.nodeId,
+    nextActionAtT: 0, speed: 2, unsafeEntryAtT: 0, sleeping: false, hitPoints: 10, defense: 0, attack: 0,
+    name: '森林野豬', travel: null,
+  };
+  const state = {
+    ...initial,
+    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, { ...actor, nextActionAtT: 100 }])),
+  };
+  store.commit(0, { ...state, actors: { ...state.actors, [monster.id]: monster } }, []);
+  let requests = 0;
+  const runner = new SimulationRunner({ store, settings, secrets, graph, actionContent, fetcher: async () => { requests += 1; throw new Error('monster actions are automatic'); } });
+  try {
+    await runner.stepOnce();
+    assert.equal(requests, 0);
+    assert.equal(store.readSnapshot()?.sequence, 1);
+    assert.equal(store.readEvents()[0]?.kind, 'monster-action-settled');
+    assert.equal(store.readSnapshot()?.actors[monster.id]?.nextActionAtT, 1);
   } finally {
     store.close();
     settings.close();

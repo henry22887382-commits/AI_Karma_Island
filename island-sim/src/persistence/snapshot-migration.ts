@@ -2,7 +2,7 @@ import type { WorldActor, WorldState } from '../domain/model.ts';
 
 /** Read-time v1->v2 upgrade; the original JSON is unchanged until the next normal commit. */
 export function migrateWorldSnapshot(snapshot: WorldState): WorldState {
-  if (snapshot.schemaVersion === 2) return snapshot;
+  if (snapshot.schemaVersion === 2) return snapshot.mapId ? snapshot : { ...snapshot, mapId: 'default-map' };
   const actors: Record<string, WorldActor> = {};
   for (const [key, actor] of Object.entries(snapshot.actors)) {
     const identity = legacySlotAndGeneration(actor.id);
@@ -16,7 +16,7 @@ export function migrateWorldSnapshot(snapshot: WorldState): WorldState {
       diedAtT: actor.diedAtT ?? null,
     };
   }
-  return { ...snapshot, schemaVersion: 2, actors };
+  return { ...snapshot, schemaVersion: 2, mapId: snapshot.mapId ?? 'default-map', actors };
 }
 
 function legacySlotAndGeneration(actorId: string): { readonly slotId: string; readonly generation: number } | undefined {

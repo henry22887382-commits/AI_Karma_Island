@@ -12,26 +12,43 @@ const categoryWeights = parseCsv(await readFile(new URL('container_category_weig
 const subpools = parseCsv(await readFile(new URL('container_item_subpools.csv', root), 'utf8'));
 const effectiveRates = parseCsv(await readFile(new URL('container_effective_item_rates.csv', root), 'utf8'));
 
-test('all three dungeon event pools total 100 percent in the source data', () => {
+test('all source dungeon event pools total exactly 300 integer weight units', () => {
   const floors = [...new Set(events.map((row) => row.floor ?? '').filter(Boolean))];
   assert.equal(floors.length, 3);
   for (const floor of floors) {
-    const rows = events.filter((row) => row.floor === floor);
-    assert.equal(rows.reduce((sum, row) => sum + Number(row.probability_percent ?? 0), 0), 100, floor);
-  }
-  for (const floor of floors) {
-    assert.equal(events.filter((row) => row.floor === floor && row.event_class === 'monster')
-      .reduce((sum, row) => sum + Number(row.probability_percent ?? 0), 0), 50, `${floor} direct encounters`);
+    const scopes = floor === '火山洞窟' ? ['first_row', 'non_first_row'] : ['all'];
+    for (const scope of scopes) {
+      const rows = events.filter((row) => row.floor === floor && (row.node_scope === 'all' || row.node_scope === scope));
+      assert.equal(rows.reduce((sum, row) => sum + Number(row.weight_units ?? 0), 0), 300, `${floor}/${scope}`);
+      assert.equal(rows.filter((row) => row.event_class === 'monster')
+        .reduce((sum, row) => sum + Number(row.weight_units ?? 0), 0), 150, `${floor}/${scope} direct encounters`);
+    }
   }
 });
 
-test('third-floor volcanic bombs are gated outside A1 B1 C1 without consuming RNG', () => {
+test('third-floor non-first-row events redistribute the removed 8% evenly among three old non-monster event types', () => {
+  const shared = events.filter((row) => row.floor === '火山洞窟' && row.node_scope === 'all');
+  const firstRow = events.filter((row) => row.floor === '火山洞窟' && row.node_scope === 'first_row');
+  const nonFirstRow = events.filter((row) => row.floor === '火山洞窟' && row.node_scope === 'non_first_row');
+  assert.deepEqual(firstRow.map((row) => [row.event, row.weight_units]), [
+    ['火山彈', '24'], ['灼熱泉水', '18'], ['遠古寶箱', '39'], ['探險者遺物', '36'],
+  ]);
+  assert.deepEqual(nonFirstRow.map((row) => [row.event, row.weight_units]), [
+    ['灼熱泉水', '26'], ['遠古寶箱', '47'], ['探險者遺物', '44'],
+  ]);
+  assert.equal(shared.filter((row) => row.event === '大型熔岩飛濺')[0]?.weight_units, '33');
+  assert.equal(nonFirstRow.some((row) => row.event === '火山彈'), false);
+  assert.equal(shared.reduce((sum, row) => sum + Number(row.weight_units ?? 0), 0) +
+    nonFirstRow.reduce((sum, row) => sum + Number(row.weight_units ?? 0), 0), 300);
+});
+
+test('third-floor non-first-row events resolve without volcanic bombs or an unresolved gate', () => {
   const rng = new SeededRandom('12345678');
   const result = drawDungeonEvent({ floor: '火山洞窟', nodeId: 'A2', events, random: rng });
-  assert.equal(result.event, null);
-  assert.equal(result.unresolved?.sourceId, 'D-007');
-  assert.equal(result.randomDraws.length, 0);
-  assert.equal(rng.stateHex, '12345678');
+  assert.equal(result.unresolved, null);
+  assert.notEqual(result.event?.event, '火山彈');
+  assert.equal(result.randomDraws.length, 1);
+  assert.equal(result.rngStateAfter, rng.stateHex);
 });
 
 test('the three first-row nodes retain the source volcanic bomb event pool', () => {
@@ -71,14 +88,15 @@ test('fire lizard bonus drop remains a bomb-or-none pool separate from the guara
   assert.notEqual(result.item, '勇者劍');
 });
 
-test('container category and item weights use both source stages and preserve provisional status', () => {
+test('container category and item weights use both source stages and return one confirmed item', () => {
   const source = '地表漂流木箱';
   assert.equal(categoryWeights.filter((row) => row.source === source)
     .reduce((sum, row) => sum + Number(row.category_percent), 0), 100);
   assert.equal(subpools.filter((row) => row.source === source && row.category === '食物')
     .reduce((sum, row) => sum + Number(row.within_category_percent), 0), 100);
   const result = drawContainerItem({ source, categoryWeights, subpools, random: new SeededRandom('12345678') });
-  assert.equal(result.provisional, true);
+  assert.equal(result.provisional, false);
+  assert.equal(result.status, 'user_confirmed_one_item_per_item_container');
   assert.ok(['椰子', '魚', '肉'].includes(result.item ?? ''));
   assert.equal(effectiveRates.find((row) => row.source === source && row.item === result.item)?.status, 'derived_from_two_stage_pool');
 });
@@ -87,9 +105,15 @@ test('all seven container sources have valid category and subpool totals matchin
   const sources = [...new Set(categoryWeights.map((row) => row.source ?? '').filter(Boolean))];
   assert.equal(sources.length, 7);
   assert.equal(effectiveRates.length, 46);
+  assert.ok(categoryWeights.every((row) => row.status === 'user_confirmed_one_item_per_item_container'));
+  assert.ok(subpools.every((row) => row.status === 'user_confirmed_one_item_per_item_container'));
   for (const source of sources) {
     const categories = categoryWeights.filter((row) => row.source === source);
     assert.equal(categories.reduce((sum, row) => sum + Number(row.category_percent ?? 0), 0), 100, source);
+    const draw = drawContainerItem({ source, categoryWeights, subpools, random: new SeededRandom('12345678') });
+    assert.equal(draw.provisional, false, source);
+    assert.equal(draw.status, 'user_confirmed_one_item_per_item_container', source);
+    assert.equal(typeof draw.item, 'string', source);
     for (const category of categories) {
       const items = subpools.filter((row) => row.source === source && row.category === category.category);
       if (Number(category.category_percent) === 0) {

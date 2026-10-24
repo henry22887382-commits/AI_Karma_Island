@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parseCsv } from '../content/csv.ts';
 import { SeededRandom } from '../engine/random.ts';
-import { chooseLivingTarget, drawAttack, drawDragonActionMode, parrotCounterattackOnTauntedHit, shouldSummonCompanion, shouldPlantExecute, drawSlimeReflection, resolveMonsterAttackAction, planBossVictoryRewards, monsterStatsFromSource, resolveSlimeRetaliation, recordBoss2Breakthroughs } from './monsters.ts';
+import { chooseLivingTarget, drawAttack, drawDragonActionMode, parrotCounterattackOnTauntedHit, shouldSummonCompanion, shouldPlantExecute, drawSlimeReflection, resolveMonsterAttackAction, planBossVictoryRewards, monsterStatsFromSource, resolveSlimeRetaliation, recordBoss2Breakthroughs, resolveScheduledMonsterTurn } from './monsters.ts';
 
 const root = new URL('../../references/tables/', import.meta.url);
 const attacks = parseCsv(await readFile(new URL('attack_distributions.csv', root), 'utf8'));
 const monsterRows = parseCsv(await readFile(new URL('monsters.csv', root), 'utf8'));
+
 
 test('verified attack distributions for dungeon monsters total 100 percent', () => {
   const dungeonNames = new Set(monsterRows
@@ -70,6 +71,127 @@ test('attack damage is drawn from the exact source distribution', () => {
   assert.equal(result.randomDraw.sourceId, 'rat.attack.1');
 });
 
+test('scheduled monster turn uses its source speed time, applies one-turn cooldown, and returns target result', () => {
+  const rat = monsterRows.find((row) => row.name === '管道巨鼠');
+  assert.ok(rat);
+  const result = resolveScheduledMonsterTurn({
+    monster: rat, worldTimeT: 6, nextActionAtT: 6,
+    targets: [{ id: 'resident-a', hitPoints: 20, defense: 0 }],
+    distribution: attacks.filter((row) => row.monster === '管道巨鼠'),
+    random: new SeededRandom('12345678'), sourceId: 'rat-turn',
+  });
+  assert.equal(result.action, 'attack');
+  assert.equal(result.speed, 4);
+  assert.equal(result.actionTimeT, 6);
+  assert.equal(result.nextActionAtT, 7);
+  assert.equal(result.hits.length, 2);
+  assert.equal(result.targetHitPointsAfter['resident-a'], 20 - result.hits.reduce((sum, hit) => sum + hit.appliedDamage, 0));
+  assert.ok(result.randomDraws.length >= 4);
+});
+
+test('dragon breath is a scheduled group attack with independent equal-weight damage for every living participant', () => {
+  const dragon = monsterRows.find((row) => row.name === '巨龍');
+  assert.ok(dragon);
+  const seed = '3c6ef362';
+  assert.equal(drawDragonActionMode(new SeededRandom(seed)).mode, 'breath');
+  const result = resolveScheduledMonsterTurn({
+    monster: dragon, worldTimeT: 4, nextActionAtT: 4,
+    targets: [{ id: 'resident-a', hitPoints: 30, defense: 18 }, { id: 'resident-b', hitPoints: 25, defense: 8 }],
+    distribution: [], random: new SeededRandom(seed), sourceId: 'dragon-test',
+  });
+  assert.equal(result.action, 'breath');
+  assert.equal(result.unresolved.length, 0);
+  assert.deepEqual(result.hits.map(({ targetId, rawDamage, appliedDamage }) => ({ targetId, rawDamage, appliedDamage })), [
+    { targetId: 'resident-a', rawDamage: 21, appliedDamage: 3 },
+    { targetId: 'resident-b', rawDamage: 20, appliedDamage: 12 },
+  ]);
+  assert.equal(result.nextActionAtT, 5);
+});
+
+test('capybara sleeps for three one-T combat actions before attacking', () => {
+  const capybara = monsterRows.find((row) => row.name === '大大水豚');
+  assert.ok(capybara);
+  let combatRoundCount = 0;
+  let nextActionAtT = 0;
+  for (let round = 1; round <= 4; round += 1) {
+    const result = resolveScheduledMonsterTurn({
+      monster: capybara,
+      worldTimeT: nextActionAtT,
+      nextActionAtT,
+      combatRoundCount,
+      targets: [{ id: 'resident-a', hitPoints: 20, defense: 0 }],
+      distribution: attacks.filter((row) => row.monster === '大大水豚'),
+      random: new SeededRandom('12345678'),
+      sourceId: `capybara-turn-${round}`,
+    });
+    assert.equal(result.action, round <= 3 ? 'sleep' : 'attack');
+    assert.equal(result.actionTimeT, round - 1);
+    assert.equal(result.nextActionAtT, round);
+    assert.equal(result.combatRoundCount, round);
+    if (round <= 3) assert.equal(result.hits.length, 0);
+    combatRoundCount = result.combatRoundCount;
+    nextActionAtT = result.nextActionAtT;
+  }
+});
+
+test('scheduled Boss 1 flying and taunt actions consume one T without inventing attacks', () => {
+  const boss = monsterRows.find((row) => row.name === '大金剛鸚鵡');
+  assert.ok(boss);
+  const cases = [
+    { seed: '00003000', expected: 'flying' },
+    { seed: '00003800', expected: 'taunt' },
+  ] as const;
+  for (const { seed, expected } of cases) {
+    const result = resolveScheduledMonsterTurn({
+      monster: boss, worldTimeT: 10, nextActionAtT: 10,
+      targets: [{ id: 'resident-a', hitPoints: 20, defense: 0 }],
+      distribution: attacks.filter((row) => row.monster === '大金剛鸚鵡'),
+      random: new SeededRandom(seed), sourceId: `parrot-${expected}`,
+    });
+    assert.equal(result.action, expected);
+    assert.equal(result.actionTimeT, 10);
+    assert.equal(result.nextActionAtT, 11);
+    assert.deepEqual(result.hits, []);
+    assert.equal(result.invulnerable, expected === 'flying');
+    assert.equal(result.taunts, expected === 'taunt');
+  }
+});
+
+test('Boss 2 acts without an HP field, misses on most attack draws, and uses source 8/9 damage on a hit', () => {
+  const boss = monsterRows.find((row) => row.name === '大貓爪');
+  assert.ok(boss);
+  assert.deepEqual({ hp: monsterStatsFromSource(boss).hitPoints, defense: monsterStatsFromSource(boss).defense }, { hp: null, defense: 4 });
+  const sourceAttacks = attacks.filter((row) => row.monster === '大貓爪');
+  let hit: ReturnType<typeof resolveScheduledMonsterTurn> | undefined;
+  let miss: ReturnType<typeof resolveScheduledMonsterTurn> | undefined;
+  let hitCount = 0;
+  const sampleCount = 2_000;
+  for (let value = 1; value <= sampleCount; value += 1) {
+    const result = resolveScheduledMonsterTurn({
+      monster: boss, worldTimeT: 10, nextActionAtT: 10,
+      targets: [{ id: 'resident-a', hitPoints: 30, defense: 5 }],
+      distribution: sourceAttacks,
+      random: new SeededRandom(value.toString(16).padStart(8, '0')),
+      sourceId: `catpaw-${value}`,
+    });
+    assert.equal(result.unresolved.length, 0);
+    assert.equal(result.speed, 6);
+    assert.equal(result.nextActionAtT, 11);
+    if (result.hits.length === 0) miss ??= result;
+    else {
+      hitCount += 1;
+      hit ??= result;
+    }
+  }
+  assert.ok(miss, 'Boss 2 must miss on an attack action');
+  assert.deepEqual(miss.hits, []);
+  assert.ok(hit, 'Boss 2 must hit on an attack action');
+  assert.equal(hit.hits.length, 1);
+  assert.ok([8, 9].includes(hit.hits[0]!.rawDamage));
+  assert.equal(hit.hits[0]!.appliedDamage, Math.max(0, hit.hits[0]!.rawDamage - 5));
+  assert.ok(hitCount >= 350 && hitCount <= 450, `expected about 20% hits, got ${hitCount}/${sampleCount}`);
+});
+
 test('summon is allowed at or below 30 percent only once while the monster is alive', () => {
   assert.equal(shouldSummonCompanion({ hitPoints: 2, maxHitPoints: 8, alreadySummoned: false }), true);
   assert.equal(shouldSummonCompanion({ hitPoints: 3, maxHitPoints: 8, alreadySummoned: false }), false);
@@ -107,10 +229,14 @@ test('slime lethal received hit still applies the additional source-weighted ref
   assert.equal(result.recipientHitPointsAfter, 10 - result.appliedReflectionDamage);
 });
 
-test('dragon action weights are known while its damage sub-distribution stays unresolved', () => {
+test('dragon action weights and equal-weight damage ranges are resolved', () => {
   const modes = new Set<string>();
   const rng = new SeededRandom('12345678');
-  for (let index = 0; index < 40; index += 1) modes.add(drawDragonActionMode(rng, `dragon.mode.${index}`).mode);
+  for (let index = 0; index < 40; index += 1) {
+    const result = drawDragonActionMode(rng, `dragon.mode.${index}`);
+    modes.add(result.mode);
+    assert.equal(result.unresolvedDamage, null);
+  }
   assert.ok(modes.has('claw') && modes.has('breath'));
 });
 

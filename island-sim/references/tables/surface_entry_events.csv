@@ -1,0 +1,12 @@
+terrain,outcome,probability_percent,day_trigger_percent,night_conditional_trigger_percent,night_enemy_miss_percent,day_overall_percent,night_overall_percent,effect,object_type,item_id,monster_name
+beach,椰子,50,10,15,70,5,5.25,create_object,item,椰子,
+beach,漂流瓶,30,10,15,70,3,3.15,create_object,item,漂流瓶,
+beach,沙灘螃蟹,20,10,15,70,2,2.1,spawn_monster,,,沙灘螃蟹
+forest,森林野豬,50,15,25,65,7.5,8.125,spawn_monster,,,森林野豬
+forest,有益莓果,33.3333333333333,15,25,65,5,5.4166666667,create_object,item,莓果,
+forest,有毒莓果,16.6666666666667,15,25,65,2.5,2.7083333333,create_object,item,毒莓,
+river,急流,45,15,20,65,6.75,5.85,force_move,,,
+river,漂流木箱,40,15,20,65,6,5.2,create_object,container,漂流木箱,
+river,河流夜熊,15,15,20,65,2.25,1.95,spawn_monster,,,河流夜熊
+rock,山羊,50,20,25,70,10,8.75,spawn_monster,,,山羊
+rock,落石,50,20,25,70,10,8.75,hp-1;sleep-1,hazard,落石,

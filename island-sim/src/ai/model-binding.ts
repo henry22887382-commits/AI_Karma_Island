@@ -4,8 +4,9 @@ import type { ModelSlotConfig, ProcessModelSecrets } from './model-settings.ts';
 import { isModelSlotReady } from './model-settings.ts';
 
 export type CurrentModelPriceResult =
-  | { readonly ok: true; readonly price: { readonly inputUsdPerMillion: number; readonly outputUsdPerMillion: number; readonly priceVersion: string } }
+  | { readonly ok: true; readonly price: ModelPrice | null }
   | { readonly ok: false; readonly unresolved: string };
+export type ModelPrice = { readonly inputUsdPerMillion: number; readonly outputUsdPerMillion: number; readonly priceVersion: string };
 
 /** Resolve current prices by a life-bound provider/model identity, never by slot alone. */
 export function currentPriceForBinding(binding: ModelBinding | null, slots: readonly ModelSlotConfig[]): CurrentModelPriceResult {
@@ -13,11 +14,11 @@ export function currentPriceForBinding(binding: ModelBinding | null, slots: read
     return { ok: false, unresolved: 'Model identity is not bound for this resident life.' };
   }
   const matches = slots.filter((slot) => slot.provider === binding.provider && slot.model === binding.model);
-  if (matches.length === 0) return { ok: false, unresolved: `No current price record matches ${binding.provider}/${binding.model}.` };
+  if (matches.length === 0) return { ok: true, price: null };
   const priced = matches.filter((slot) => slot.inputUsdPerMillion !== null && slot.outputUsdPerMillion !== null);
-  if (priced.length === 0) return { ok: false, unresolved: `Current prices are missing for ${binding.provider}/${binding.model}.` };
+  if (priced.length === 0) return { ok: true, price: null };
   const rates = new Set(priced.map((slot) => `${slot.inputUsdPerMillion}:${slot.outputUsdPerMillion}`));
-  if (rates.size > 1) return { ok: false, unresolved: `Current price records disagree for ${binding.provider}/${binding.model}.` };
+  if (rates.size > 1) return { ok: true, price: null };
   const latest = priced.reduce((newest, slot) => (slot.updatedAt ?? '') > (newest.updatedAt ?? '') ? slot : newest);
   return {
     ok: true,
@@ -41,7 +42,7 @@ export function modelAssignmentsBySlot(slots: readonly ModelSlotConfig[], secret
       model: slot.model,
       fallbackModels: slot.fallbackModels,
       maxInputTokens: slot.maxInputTokens,
-      maxOutputTokens: slot.maxOutputTokens,
+      maxContextCharacters: slot.maxContextCharacters,
       modelSizeB: slot.modelSizeB,
       sizeAtLeast8BConfirmed: slot.sizeAtLeast8BConfirmed,
       styleDescription: slot.styleDescription,

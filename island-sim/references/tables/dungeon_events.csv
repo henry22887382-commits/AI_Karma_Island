@@ -1,25 +1,28 @@
-floor,event,probability_percent,event_class,condition,status
-雨林,巨蟒,17,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,綠矮人,17,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,食人花,16,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,毒藤蔓,8,hazard,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,遺失背包,15,container,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,有益莓果,6,resource,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,有毒莓果,3,resource,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-雨林,森林寶箱,18,container,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,管道巨鼠,17,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,黏液怪,17,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,大大水豚,16,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,熱泉噴發,7,hazard,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,濕滑水道,11,forced_slime,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,催眠溫泉水,7,optional,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,漂流背包,14,container,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-溫泉下水道,生鏽寶箱,11,container,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,火蜥蜴,17,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,熔岩史萊姆,17,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,火翼蝙蝠,16,monster,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,大型熔岩飛濺,11,hazard,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,火山彈,8,first_row_only,A1/B1/C1 only;nonfirstrow_reweight_TBD,confirmed_event_pool_or_summary
-火山洞窟,灼熱泉水,6,optional,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,遠古寶箱,13,container,enter_empty_non_boss_node,confirmed_event_pool_or_summary
-火山洞窟,探險者遺物,12,resource,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+floor,event,probability_percent,event_class,node_scope,weight_units,condition,status
+雨林,巨蟒,17,monster,all,51,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,綠矮人,17,monster,all,51,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,食人花,16,monster,all,48,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,毒藤蔓,8,hazard,all,24,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,遺失背包,15,container,all,45,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,有益莓果,6,resource,all,18,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,有毒莓果,3,resource,all,9,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+雨林,森林寶箱,18,container,all,54,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,管道巨鼠,17,monster,all,51,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,黏液怪,17,monster,all,51,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,大大水豚,16,monster,all,48,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,熱泉噴發,7,hazard,all,21,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,濕滑水道,11,forced_slime,all,33,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,催眠溫泉水,7,optional,all,21,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,漂流背包,14,container,all,42,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+溫泉下水道,生鏽寶箱,11,container,all,33,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+火山洞窟,火蜥蜴,17,monster,all,51,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+火山洞窟,熔岩史萊姆,17,monster,all,51,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+火山洞窟,火翼蝙蝠,16,monster,all,48,enter_empty_non_boss_node,confirmed_event_pool_or_summary
+火山洞窟,大型熔岩飛濺,11,hazard,all,33,enter_empty_non_boss_node_then_independent_damage_draw,confirmed_user_spec:4/5/6 HP loss each 1/3; direct damage ignores DEF; do not merge event and damage pools
+火山洞窟,火山彈,8,first_row_only,first_row,24,A1/B1/C1 only,confirmed_user_spec:first-row-only
+火山洞窟,灼熱泉水,6,optional,first_row,18,enter_empty_non_boss_node,source_rate_first_row_preserved
+火山洞窟,遠古寶箱,13,container,first_row,39,enter_empty_non_boss_node,source_rate_first_row_preserved
+火山洞窟,探險者遺物,12,resource,first_row,36,enter_empty_non_boss_node,source_rate_first_row_preserved
+火山洞窟,灼熱泉水,8.6666666667,optional,non_first_row,26,enter_empty_non_boss_node,confirmed_user_spec:D-007 equal 8/3pp allocation; exact probability 26/3 percent
+火山洞窟,遠古寶箱,15.6666666667,container,non_first_row,47,enter_empty_non_boss_node,confirmed_user_spec:D-007 equal 8/3pp allocation; exact probability 47/3 percent
+火山洞窟,探險者遺物,14.6666666666,resource,non_first_row,44,enter_empty_non_boss_node,confirmed_user_spec:D-007 equal 8/3pp allocation; exact probability 44/3 percent

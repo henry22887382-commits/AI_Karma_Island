@@ -1,4 +1,4 @@
-category,name_zh,tier,slot,attack,defense,speed_modifier,unique,status,note
+﻿category,name_zh,tier,slot,attack,defense,speed_modifier,unique,status,note
 weapon,破損木劍,wood,one_hand,3,0,0,false,summary_verified,
 weapon,鐵劍,iron,one_hand,5,0,0,false,summary_verified,
 weapon,騎士劍,knight,one_hand,7,0,0,false,summary_verified,
@@ -27,3 +27,8 @@ heavy_top,騎士重甲上衣,knight,top,0,4,-3,false,summary_verified,
 heavy_bottom,簡易重甲下衣,simple,bottom,0,2,-3,false,summary_verified,
 heavy_bottom,鐵重甲下衣,iron,bottom,0,3,-3,false,summary_verified,
 heavy_bottom,騎士重甲下衣,knight,bottom,0,4,-3,false,summary_verified,
+bottom,布下裝,cloth,bottom,0,0,1,false,user_authorized_container_definition,容器物品定義
+weapon,雙手巨劍,iron,both_hands,7,0,0,false,user_authorized_container_definition,容器物品定義
+bottom,鎖甲下裝,chain,bottom,0,2,0,false,user_authorized_container_definition,容器物品定義
+top,騎士上裝,knight,top,0,3,0,false,user_authorized_container_definition,容器物品定義
+bottom,騎士下裝,knight,bottom,0,2,1,false,user_authorized_container_definition,容器物品定義

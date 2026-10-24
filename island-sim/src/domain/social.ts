@@ -110,7 +110,7 @@ export function resolveTradeRequest(input: {
   return {
     ...base,
     offer,
-    events: [socialEvent(input.worldTimeT, input.proposer, 'trade-requested', { offerId: offer.offerId, proposerId: offer.proposerId, receiverId: offer.receiverId })],
+    events: [socialEvent(input.worldTimeT, input.proposer, 'trade-requested', { offerId: offer.offerId, proposerId: offer.proposerId, receiverId: offer.receiverId, offeredItemId: offer.offeredItemId, requestedItemId: offer.requestedItemId })],
     unresolved: [],
   };
 }
@@ -144,7 +144,7 @@ export function resolveTradeResponse(input: {
   if (input.decision === 'reject') return {
     timeCostT: 1, offerStatus: 'rejected', inventoryByActorId: {},
     uniqueOwnerByItemIdDelta: {},
-    events: [socialEvent(input.worldTimeT, input.receiver, 'trade-rejected', { offerId: input.offer.offerId, proposerId: input.proposer.id, receiverId: input.receiver.id })], unresolved: [],
+    events: [socialEvent(input.worldTimeT, input.receiver, 'trade-rejected', { offerId: input.offer.offerId, proposerId: input.proposer.id, receiverId: input.receiver.id, offeredItemId: input.offer.offeredItemId, requestedItemId: input.offer.requestedItemId })], unresolved: [],
   };
   const proposerInventory = input.proposer.inventory;
   const receiverInventory = input.receiver.inventory;
@@ -162,7 +162,7 @@ export function resolveTradeResponse(input: {
       ...(input.uniqueItemIds?.includes(input.offer.offeredItemId) ? { [input.offer.offeredItemId]: input.receiver.id } : {}),
       ...(input.uniqueItemIds?.includes(input.offer.requestedItemId) ? { [input.offer.requestedItemId]: input.proposer.id } : {}),
     },
-    events: [socialEvent(input.worldTimeT, input.receiver, 'trade-accepted', { offerId: input.offer.offerId, proposerId: input.proposer.id, receiverId: input.receiver.id })],
+    events: [socialEvent(input.worldTimeT, input.receiver, 'trade-accepted', { offerId: input.offer.offerId, proposerId: input.proposer.id, receiverId: input.receiver.id, offeredItemId: input.offer.offeredItemId, requestedItemId: input.offer.requestedItemId })],
     unresolved: [],
   };
 }
@@ -171,6 +171,7 @@ export interface GiftResult {
   readonly timeCostT: 1;
   readonly inventoryByActorId: Readonly<Record<string, readonly string[]>>;
   readonly uniqueOwnerByItemIdDelta: Readonly<Record<string, string>>;
+  readonly groundDrop?: { readonly itemId: string; readonly nodeId: string };
   readonly events: readonly SocialEventDraft[];
   readonly unresolved: readonly SocialGate[];
 }
@@ -192,14 +193,26 @@ export function resolveGift(input: {
   const recipientInventory = input.recipient.inventory;
   if (!giverInventory || !recipientInventory) return { ...noTransfer, unresolved: [{ sourceId: 'gift-inventory', detail: 'Both current inventories are required to settle atomically.' }] };
   if (!giverInventory.includes(input.itemId)) return { ...noTransfer, unresolved: [{ sourceId: 'gift-ownership', detail: 'The giver does not currently own the item.' }] };
-  if (recipientInventory.length >= 10) return { ...noTransfer, unresolved: [{ sourceId: 'gift-capacity', detail: 'The recipient has no free inventory slot.' }] };
   const uniqueGate = checkUniqueOwnership({ offeredItemId: input.itemId, requestedItemId: '' }, input.giver, input.recipient, input.uniqueItemIds, input.uniqueOwnerByItemId);
   if (uniqueGate) return { ...noTransfer, unresolved: [uniqueGate] };
+  if (recipientInventory.length >= 10) {
+    return {
+      timeCostT: 1,
+      inventoryByActorId: { [input.giver.id]: removeOne(giverInventory, input.itemId) },
+      uniqueOwnerByItemIdDelta: {},
+      groundDrop: { itemId: input.itemId, nodeId: input.giver.nodeId! },
+      events: [socialEvent(input.worldTimeT, input.giver, 'gift-dropped', {
+        giverId: input.giver.id, recipientId: input.recipient.id, itemId: input.itemId,
+        reason: 'recipient-inventory-full',
+      })],
+      unresolved: [],
+    };
+  }
   return {
     timeCostT: 1,
     inventoryByActorId: { [input.giver.id]: removeOne(giverInventory, input.itemId), [input.recipient.id]: [...recipientInventory, input.itemId] },
     uniqueOwnerByItemIdDelta: input.uniqueItemIds?.includes(input.itemId) ? { [input.itemId]: input.recipient.id } : {},
-    events: [socialEvent(input.worldTimeT, input.giver, 'gift-transferred', { giverId: input.giver.id, recipientId: input.recipient.id })],
+    events: [socialEvent(input.worldTimeT, input.giver, 'gift-transferred', { giverId: input.giver.id, recipientId: input.recipient.id, itemId: input.itemId })],
     unresolved: [],
   };
 }

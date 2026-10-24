@@ -12,7 +12,7 @@ const binding: ModelBinding = {
 function slot(overrides: Partial<ModelSlotConfig>): ModelSlotConfig {
   return {
     slotId: 1, provider: null, baseUrl: null, model: null, fallbackModels: [], inputUsdPerMillion: null,
-    outputUsdPerMillion: null, maxInputTokens: null, maxOutputTokens: null, modelSizeB: null, sizeAtLeast8BConfirmed: false, styleDescription: null, updatedAt: null, credentialRef: `ref-${overrides.slotId ?? 1}`, ...overrides,
+    outputUsdPerMillion: null, maxInputTokens: null, maxContextCharacters: 8000, maxOutputTokens: null, modelSizeB: null, sizeAtLeast8BConfirmed: false, styleDescription: null, updatedAt: null, credentialRef: `ref-${overrides.slotId ?? 1}`, ...overrides,
   };
 }
 

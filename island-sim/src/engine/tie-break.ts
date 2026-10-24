@@ -39,9 +39,7 @@ export function compareSameSpeed(left: TieBreakMetrics, right: TieBreakMetrics):
   for (const criterion of criteria) {
     const leftValue = left[criterion];
     const rightValue = right[criterion];
-    if (leftValue === null || rightValue === null || !Number.isFinite(leftValue) || !Number.isFinite(rightValue)) {
-      return { winnerId: null, unresolved: `Same-speed ${criterion} value is missing; priority cannot be determined`, tied: false };
-    }
+    if (leftValue === null || rightValue === null || !Number.isFinite(leftValue) || !Number.isFinite(rightValue)) continue;
     if (leftValue !== rightValue) return { winnerId: leftValue > rightValue ? left.id : right.id, unresolved: null, tied: false };
   }
   return { winnerId: null, unresolved: null, tied: true };

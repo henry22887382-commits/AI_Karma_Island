@@ -23,10 +23,51 @@ test('reserves worst-case monthly cost before HTTP and settles actual provider u
   assert.equal(ledger.reservations, 1);
   assert.equal(ledger.settlements.length, 1);
   assert.equal(ledger.settlements[0]?.actualUsd, 0.00004);
-  assert.deepEqual(ledger.settlements[0]?.record, {
-    providerId: 'provider/model', category: 'prompt', inputTokens: 20, outputTokens: 10,
-    costUsd: 0.00004, recordedAt: '2026-10-20T00:00:00.000Z',
-  });
+  assert.deepEqual(ledger.settlements[0]?.record, [
+    { providerId: 'provider/model', category: 'prompt', inputTokens: 20, outputTokens: 0, costUsd: 0.00002, recordedAt: '2026-10-20T00:00:00.000Z' },
+    { providerId: 'provider/model', category: 'output', inputTokens: 0, outputTokens: 10, costUsd: 0.00002, recordedAt: '2026-10-20T00:00:00.000Z' },
+  ]);
+});
+
+test('records input and output token costs under separate categories', async () => {
+  const ledger = fakeLedger();
+  const inner: ModelProvider = { id: 'provider/model', ready: true, complete: async () => ({ raw: '{}', usage: { inputTokens: 20, outputTokens: 10 } }) };
+  const provider = new BudgetedModelProvider({ inner, pricing, ledger: ledger.ledger, clock: () => new Date('2026-10-20T00:00:00Z') });
+  await provider.complete('prompt', 100);
+  assert.deepEqual(ledger.settlements[0]?.record, [
+    { providerId: 'provider/model', category: 'prompt', inputTokens: 20, outputTokens: 0, costUsd: 0.00002, recordedAt: '2026-10-20T00:00:00.000Z' },
+    { providerId: 'provider/model', category: 'output', inputTokens: 0, outputTokens: 10, costUsd: 0.00002, recordedAt: '2026-10-20T00:00:00.000Z' },
+  ]);
+});
+
+test('categorizes retried and message or biography provider calls', async () => {
+  const inner: ModelProvider = { id: 'provider/model', ready: true, complete: async () => ({ raw: '{}', usage: { inputTokens: 20, outputTokens: 10 } }) };
+  const retryLedger = fakeLedger();
+  const retryProvider = new BudgetedModelProvider({ inner, pricing, ledger: retryLedger.ledger, clock: () => new Date('2026-10-20T00:00:00Z') });
+  await retryProvider.complete('prompt', 100, { operation: 'action', retry: true });
+  assert.deepEqual(retryLedger.settlements[0]?.record, [
+    { providerId: 'provider/model', category: 'retry', inputTokens: 20, outputTokens: 10, costUsd: 0.00004, recordedAt: '2026-10-20T00:00:00.000Z' },
+  ]);
+
+  for (const operation of ['message', 'biography'] as const) {
+    const ledger = fakeLedger();
+    const provider = new BudgetedModelProvider({ inner, pricing, ledger: ledger.ledger, clock: () => new Date('2026-10-20T00:00:00Z') });
+    await provider.complete('prompt', 100, { operation, retry: false });
+    assert.equal((ledger.settlements[0]?.record as readonly { category: string }[])[0]?.category, operation);
+  }
+});
+
+test('records a valid message action proposal as message cost in the same action call', async () => {
+  const ledger = fakeLedger();
+  const inner: ModelProvider = {
+    id: 'provider/model', ready: true,
+    complete: async () => ({ raw: JSON.stringify({ action_id: 'say-2', intent: '回覆', text: 'TEST_TEXT' }), usage: { inputTokens: 20, outputTokens: 10 } }),
+  };
+  const provider = new BudgetedModelProvider({ inner, pricing, ledger: ledger.ledger, clock: () => new Date('2026-10-20T00:00:00Z') });
+  await provider.complete('prompt', 100, { operation: 'action', retry: false, messageActionIds: ['say-2'] });
+  assert.deepEqual(ledger.settlements[0]?.record, [
+    { providerId: 'provider/model', category: 'message', inputTokens: 20, outputTokens: 10, costUsd: 0.00004, recordedAt: '2026-10-20T00:00:00.000Z' },
+  ]);
 });
 
 test('monthly cap rejection makes no provider request and does not retry', async () => {

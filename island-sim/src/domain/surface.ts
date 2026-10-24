@@ -1,9 +1,19 @@
 import type { CsvRow } from '../content/csv.ts';
 import { activeForestBerryPool } from '../content/surface-user-overrides.ts';
+import { SURFACE_USER_RULE_OVERRIDES } from '../content/surface-user-overrides.ts';
 import { SeededRandom } from '../engine/random.ts';
 import type { JsonValue, RandomDraw, WorldObject } from './model.ts';
 
 export type SurfaceAction = 'fishing' | 'river-exploration' | 'night-river-dive' | 'rock-exploration' | 'forest-berry-gather';
+
+const surfaceActions: readonly SurfaceAction[] = [
+  'fishing', 'river-exploration', 'night-river-dive', 'rock-exploration', 'forest-berry-gather',
+];
+
+export function isSurfaceAction(value: string): value is SurfaceAction {
+  return surfaceActions.some((action) => action === value);
+}
+
 export type RiskPolarity = 'negative' | 'nonnegative';
 
 export interface AreaRiskEntry {
@@ -35,7 +45,7 @@ export interface SurfaceEncounterSourceSummary {
   readonly spawnTrigger: string;
   readonly spawnProbabilityPercent: number | null;
   readonly certainty: string;
-  readonly relevantToForest: boolean;
+  readonly relevantToNightEncounter: boolean;
   readonly forestSpecific: boolean;
 }
 
@@ -46,11 +56,11 @@ export function summarizeSurfaceEncounterSources(monsters: readonly CsvRow[]): r
     const probability = row.spawn_probability_percent;
     const spawnProbabilityPercent = probability === undefined || probability === '' ? null : requiredNumber(probability, 'spawn_probability_percent');
     const forestSpecific = area.includes('森林');
-    const relevantToForest = forestSpecific || area.includes('所有非營火保護');
+    const relevantToNightEncounter = area.includes('所有未受有效點燃營火保護');
     return {
       name: required(row, 'name'), region: required(row, 'region'), spawnAreaTag: area,
       spawnTrigger: required(row, 'spawn_trigger'), spawnProbabilityPercent,
-      certainty: required(row, 'certainty'), relevantToForest, forestSpecific,
+      certainty: required(row, 'certainty'), relevantToNightEncounter, forestSpecific,
     };
   });
 }
@@ -74,6 +84,7 @@ export interface SurfaceActionResult {
   readonly action: SurfaceAction;
   readonly timeCostT: 0 | 3;
   readonly outcome: string | null;
+  readonly spawnMonsterName: string | null;
   readonly actorDelta: Readonly<{ hitPoints?: number; hunger?: number; sleep?: number; inventory?: readonly string[] }>;
   readonly createdObjects: readonly WorldObject[];
   readonly events: readonly SurfaceEventDraft[];
@@ -133,11 +144,15 @@ export function harvestCoconut(input: {
   if (!Number.isInteger(stock) || stock < 0 || stock > 3) throw new RangeError('Coconut stock must be an integer from 0 to 3.');
   if (stock === 0) return { harvested: false, stocks: input.stockByNode, inventory: input.inventory, createdObjects: [], unresolved: [] };
   if (!Number.isSafeInteger(input.worldTimeT) || input.worldTimeT < 0 || !Number.isSafeInteger(input.inventoryCapacity) || input.inventoryCapacity < 0) throw new RangeError('World time and inventory capacity must be nonnegative integers.');
+  if (input.inventory.length >= input.inventoryCapacity) {
+    const stocks = { ...input.stockByNode, [input.nodeId]: stock - 1 };
+    return {
+      harvested: true, stocks, inventory: input.inventory, unresolved: [],
+      createdObjects: [{ id: input.objectId, itemId: '椰子', objectType: 'item', ownerActorId: null, nodeId: input.nodeId, generatedAtT: input.worldTimeT, expiresAtT: input.worldTimeT + 72, unique: false, provisional: false }],
+    };
+  }
   const stocks = { ...input.stockByNode, [input.nodeId]: stock - 1 };
-  if (input.inventory.length < input.inventoryCapacity) return { harvested: true, stocks, inventory: [...input.inventory, '椰子'], createdObjects: [], unresolved: [] };
-  if (!input.objectId) throw new Error('A stable object ID is required when the coconut cannot fit in inventory.');
-  const object: WorldObject = { id: input.objectId, itemId: '椰子', objectType: 'item', remainsActorId: null, ownerActorId: null, nodeId: input.nodeId, generatedAtT: input.worldTimeT, expiresAtT: input.worldTimeT + 72, unique: false, provisional: false };
-  return { harvested: true, stocks, inventory: input.inventory, createdObjects: [object], unresolved: [] };
+  return { harvested: true, stocks, inventory: [...input.inventory, '椰子'], createdObjects: [], unresolved: [] };
 }
 
 export interface NightExplorationStreakResult {
@@ -194,6 +209,7 @@ export function resolveSurfaceAction(input: {
   const unresolved: SurfaceUnresolvedGate[] = [];
   const actorDelta: { hitPoints?: number; hunger?: number; sleep?: number; inventory?: readonly string[] } = {};
   let outcome: string | null = null;
+  let spawnMonsterName: string | null = null;
 
   const drawFrom = (rows: readonly CsvRow[], weightColumn: string, sourceId: string): CsvRow => {
     const entries = rows.map((row) => ({ row, weight: requiredNumber(row[weightColumn], weightColumn) }));
@@ -206,22 +222,23 @@ export function resolveSurfaceAction(input: {
   if (input.action === 'fishing') {
     const main = input.tables.fishing.filter((row) => row.parent_group === 'main');
     const selected = drawFrom(main, 'overall_probability_percent', 'surface.fishing.main');
-    if (selected.outcome === '雜物總計') {
-      const junk = input.tables.fishing.filter((row) => row.parent_group === 'junk_20');
-      const junkTotal = junk.reduce((sum, row) => sum + requiredNumber(row.overall_probability_percent, 'overall_probability_percent'), 0);
-      if (junkTotal !== requiredNumber(selected.overall_probability_percent, 'overall_probability_percent')) {
-        throw new Error(`Fishing junk subpool totals ${junkTotal}, expected ${selected.overall_probability_percent}.`);
-      }
-      const normalized = junk.map((row) => ({ ...row, conditional_probability_percent: String(Number(row.overall_probability_percent) / junkTotal * 100) }));
-      const subpool = drawFrom(normalized, 'conditional_probability_percent', 'surface.fishing.junk');
-      outcome = required(subpool, 'outcome');
-    } else outcome = required(selected, 'outcome');
+    outcome = required(selected, 'outcome');
+    if (outcome === '電鰻') spawnMonsterName = '電鰻';
   } else if (input.action === 'river-exploration' || input.action === 'night-river-dive') {
-    const rows = input.tables.surface.filter((row) => row.location_action === '河流探索');
-    outcome = required(drawFrom(rows, 'probability_percent', 'surface.river.exploration'), 'result_or_hazard');
-    if (input.action === 'night-river-dive') {
-      const bear = input.tables.surface.find((row) => row.location_action === '夜間河流潛水' && row.result_or_hazard === '夜熊');
-      if (bear !== undefined) unresolved.push({ sourceId: 'surface_exploration.csv:night-river-dive-independence', detail: 'Night-bear probability is sourced as 5%, but whether/how it is sequenced with the river fish pool remains unresolved; no bear roll was consumed.' });
+    const bearAction = input.phase === 'night' ? '河流探索_夜間' : '河流探索_白天';
+    const bear = input.tables.surface.find((row) => row.location_action === bearAction && row.result_or_hazard === '河流夜熊');
+    let bearEncountered = false;
+    if (bear !== undefined) {
+      const draw = random.next(`surface.river.bear.${input.phase}`);
+      draws.push(draw);
+      bearEncountered = draw.value < requiredNumber(bear.probability_percent, 'probability_percent') / 100;
+    }
+    if (bearEncountered) {
+      outcome = '河流夜熊';
+      spawnMonsterName = '河流夜熊';
+    } else {
+      const rows = input.tables.surface.filter((row) => row.location_action === '河流探索');
+      outcome = required(drawFrom(rows, 'probability_percent', 'surface.river.exploration'), 'result_or_hazard');
     }
   } else if (input.action === 'rock-exploration') {
     const resources = input.tables.surface.filter((row) => row.location_action === '岩石探索');
@@ -238,7 +255,7 @@ export function resolveSurfaceAction(input: {
       }
     }
   } else {
-    const rawRows = input.tables.recovered.filter((row) => row.action === '森林採野莓' && row.status === 'recovered_source_no_known_conflict');
+    const rawRows = input.tables.recovered.filter((row) => row.action === '森林採野莓' && row.status === 'user_confirmed_active_2026-10-22');
     const activePool = activeForestBerryPool();
     const rows = rawRows.map((row) => {
       const override = activePool.find((entry) => entry.outcome === row.result_or_hazard);
@@ -264,19 +281,19 @@ export function resolveSurfaceAction(input: {
   }
 
   const randomDraws = [...draws];
-  const payload: JsonValue = { action: input.action, outcome, actorDelta, uniqueItemAlreadyExists };
+  const payload: JsonValue = { action: input.action, outcome, actorDelta, uniqueItemAlreadyExists, spawnMonsterName };
   const events: SurfaceEventDraft[] = outcome === null ? [] : [{
     kind: 'surface-action-resolved', actorId: input.actor.id, nodeId: input.nodeId, worldTimeT: input.worldTimeT,
     visibility: 'player-only', payload, randomDraws,
   }];
   return {
-    action: input.action, timeCostT: 3, outcome, actorDelta, createdObjects, events, randomDraws,
+    action: input.action, timeCostT: 3, outcome, spawnMonsterName, actorDelta, createdObjects, events, randomDraws,
     rngStateAfter: random.stateHex, unresolved, uniqueItemAlreadyExists,
   };
 }
 
 function emptySurfaceAction(input: { readonly action: SurfaceAction; readonly actor: SurfaceActorInput; readonly nodeId: string; readonly worldTimeT: number }, rngState: string, unresolved: readonly SurfaceUnresolvedGate[]): SurfaceActionResult {
-  return { action: input.action, timeCostT: 0, outcome: null, actorDelta: {}, createdObjects: [], events: [], randomDraws: [], rngStateAfter: rngState, unresolved, uniqueItemAlreadyExists: false };
+  return { action: input.action, timeCostT: 0, outcome: null, spawnMonsterName: null, actorDelta: {}, createdObjects: [], events: [], randomDraws: [], rngStateAfter: rngState, unresolved, uniqueItemAlreadyExists: false };
 }
 
 function isSurfaceItemOutcome(action: SurfaceAction, outcome: string | null): outcome is string {
@@ -287,25 +304,6 @@ function isSurfaceItemOutcome(action: SurfaceAction, outcome: string | null): ou
   return outcome === '有益野果';
 }
 
-export function scaleNegativeAreaRisk(entries: readonly AreaRiskEntry[], targetNegativeTotalPercent: number | null): {
-  readonly entries: readonly AreaRiskEntry[];
-  readonly unresolved: SurfaceUnresolvedGate | null;
-} {
-  validateAreaRisk(entries);
-  if (targetNegativeTotalPercent === null) return { entries, unresolved: { sourceId: 'area-entry-negative-baseline', detail: 'The wilderness-entry negative total is not present in the available source tables.' } };
-  if (!Number.isFinite(targetNegativeTotalPercent) || targetNegativeTotalPercent < 0 || targetNegativeTotalPercent > 100) throw new RangeError('Negative target percentage must be between 0 and 100.');
-  const currentNegative = entries.filter((entry) => entry.polarity === 'negative').reduce((sum, entry) => sum + entry.weightPercent, 0);
-  if (currentNegative === 0 && targetNegativeTotalPercent > 0) return { entries, unresolved: { sourceId: 'area-entry-negative-sum-zero', detail: 'Cannot create negative events from a source table whose negative total is zero.' } };
-  const currentOther = 100 - currentNegative;
-  const targetOther = 100 - targetNegativeTotalPercent;
-  const scaled = entries.map((entry) => {
-    const currentGroup = entry.polarity === 'negative' ? currentNegative : currentOther;
-    const targetGroup = entry.polarity === 'negative' ? targetNegativeTotalPercent : targetOther;
-    return { ...entry, weightPercent: currentGroup === 0 ? 0 : entry.weightPercent * targetGroup / currentGroup };
-  });
-  return { entries: scaled, unresolved: null };
-}
-
 export interface AreaEntryRiskResult {
   readonly outcome: AreaRiskEntry | null;
   readonly randomDraws: readonly RandomDraw[];
@@ -313,12 +311,45 @@ export interface AreaEntryRiskResult {
   readonly unresolved: readonly SurfaceUnresolvedGate[];
 }
 
-/** Shared by area-entry and unsafe-sleep ticks; scheduling and time cost remain caller-owned. */
+export interface SurfaceEntryResult {
+  readonly terrain: 'beach' | 'forest' | 'river' | 'rock';
+  readonly triggered: boolean;
+  readonly triggerPercent: number;
+  readonly overallOutcomePercent: number | null;
+  readonly outcome: CsvRow | null;
+  readonly randomDraws: readonly RandomDraw[];
+  readonly rngStateAfter: string;
+}
+
+/** Resolves a source-backed terrain entry pool after the caller has checked occupancy and night-enemy priority. */
+export function resolveSurfaceEntry(input: {
+  readonly terrain: SurfaceEntryResult['terrain'];
+  readonly phase: 'day' | 'night';
+  readonly rows: readonly CsvRow[];
+  readonly actorId: string;
+  readonly nodeId: string;
+  readonly worldTimeT: number;
+  readonly randomState: string;
+}): SurfaceEntryResult {
+  const random = new SeededRandom(input.randomState);
+  const triggerPercent = input.phase === 'day'
+    ? SURFACE_USER_RULE_OVERRIDES.entry.triggerPercentByTerrain[input.terrain]
+    : SURFACE_USER_RULE_OVERRIDES.entry.nightTriggerPercentByTerrain[input.terrain];
+  const pool = input.rows.filter((row) => row.terrain === input.terrain);
+  if (pool.length === 0) throw new Error(`No surface-entry outcome rows exist for ${input.terrain}.`);
+  const entries = pool.map((row) => ({ row, weight: requiredNumber(row.probability_percent, 'probability_percent') }));
+  assertPercentTotal(entries.map(({ weight }) => weight), `Surface entry ${input.terrain}`);
+  const trigger = random.next(`surface.entry.trigger.${input.phase}.${input.terrain}.${input.nodeId}.${input.actorId}.${input.worldTimeT}`);
+  if (trigger.value >= triggerPercent / 100) return { terrain: input.terrain, triggered: false, triggerPercent, overallOutcomePercent: null, outcome: null, randomDraws: [trigger], rngStateAfter: random.stateHex };
+  const outcomeDraw = random.next(`surface.entry.outcome.${input.terrain}.${input.nodeId}.${input.actorId}.${input.worldTimeT}`);
+  const outcome = selectWeighted(entries, outcomeDraw.value).row;
+  const enemyMissPercent = input.phase === 'night' ? 100 - SURFACE_USER_RULE_OVERRIDES.nightEncounter.encounterPercentByTerrain[input.terrain] : 100;
+  return { terrain: input.terrain, triggered: true, triggerPercent, overallOutcomePercent: enemyMissPercent * triggerPercent * Number(outcome.probability_percent) / 10000, outcome, randomDraws: [trigger, outcomeDraw], rngStateAfter: random.stateHex };
+}
+
+/** Resolve an original terrain event pool without importing night encounter or sleep probabilities. */
 export function resolveAreaEntryRisk(input: {
-  readonly context: 'area-entry' | 'sleep-risk';
-  readonly isWilderness?: boolean;
   readonly table: readonly AreaRiskEntry[] | null;
-  readonly targetNegativeTotalPercent: number | null;
   readonly actorId: string;
   readonly nodeId: string;
   readonly worldTimeT: number;
@@ -326,15 +357,9 @@ export function resolveAreaEntryRisk(input: {
 }): AreaEntryRiskResult {
   const random = new SeededRandom(input.randomState);
   if (input.table === null) return { outcome: null, randomDraws: [], rngStateAfter: random.stateHex, unresolved: [{ sourceId: 'area-entry-table', detail: 'No source-backed area-entry risk table was supplied.' }] };
-  let table = input.table;
-  if (input.context === 'sleep-risk' && input.isWilderness === false) {
-    const scaled = scaleNegativeAreaRisk(table, input.targetNegativeTotalPercent);
-    if (scaled.unresolved !== null) return { outcome: null, randomDraws: [], rngStateAfter: random.stateHex, unresolved: [scaled.unresolved] };
-    table = scaled.entries;
-  }
-  validateAreaRisk(table);
+  validateAreaRisk(input.table);
   const draw = random.next(`surface.area-entry-risk.${input.nodeId}.${input.actorId}.${input.worldTimeT}`);
-  return { outcome: selectWeighted(table.map((entry) => ({ row: entry, weight: entry.weightPercent })), draw.value).row, randomDraws: [draw], rngStateAfter: random.stateHex, unresolved: [] };
+  return { outcome: selectWeighted(input.table.map((entry) => ({ row: entry, weight: entry.weightPercent })), draw.value).row, randomDraws: [draw], rngStateAfter: random.stateHex, unresolved: [] };
 }
 
 function validateAreaRisk(entries: readonly AreaRiskEntry[]): void {

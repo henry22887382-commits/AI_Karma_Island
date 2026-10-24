@@ -1,0 +1,9 @@
+item_id,display_name,identity_status,readable_text_id,use_effect,note
+紙筆,紙筆,exact_catalog_match,,,來源身份；不指定內容或使用效果
+告示牌,告示牌,exact_catalog_match,,,來源身份；不指定內容或使用效果
+炸彈,一次性炸彈,user_approved_single_approximation,,,保留容器來源標籤；不擴寫效果
+營火,營火,exact_catalog_match,,,沿用現有營火流程
+漂流瓶,漂流瓶,user_authorized_definition,,,身份定義；內容與使用效果待用戶供稿
+空白紙條,空白紙條,user_authorized_definition,,,身份定義；內容與使用效果待用戶供稿
+探險者筆記,探險者筆記,user_authorized_definition,,,身份定義；內容與使用效果待用戶供稿
+書籍,書籍,user_authorized_blank_readable_object,,,可放置的空白閱讀物件；正文待用戶供稿

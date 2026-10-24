@@ -1,4 +1,4 @@
-source,floor,item,category,effective_percent,status
+﻿source,floor,item,category,effective_percent,status
 地表漂流木箱,地表,椰子,食物,30.0,derived_from_two_stage_pool
 地表漂流木箱,地表,魚,食物,18.0,derived_from_two_stage_pool
 地表漂流木箱,地表,肉,食物,12.0,derived_from_two_stage_pool

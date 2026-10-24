@@ -32,8 +32,41 @@ export interface WorldActor {
   readonly diedAtT?: number | null;
   readonly lastActionId?: string | null;
   readonly lastActionResult?: string | null;
+  readonly routeHistory?: readonly string[];
+  readonly combatRoundCount?: number;
+  readonly boss2Breakthroughs?: number;
+  readonly invulnerableUntilT?: number | null;
+  readonly taunted?: boolean;
+  readonly dungeonRouteHistory?: readonly string[];
+  readonly encounterId?: string;
+  readonly spawnedAtSequence?: number;
+  readonly isSummonedCompanion?: boolean;
   readonly inventory?: readonly string[];
+  /** Per-instance readable texts carried by this resident; keys remain unique across identical item names. */
+  readonly readableInventoryItems?: readonly ReadableInventoryItem[];
   readonly equipment?: Readonly<Record<string, string | null>>;
+  /** Per-life record of public events this resident had a chance to observe. */
+  readonly aiMemory?: ResidentAiMemory;
+}
+
+export interface ReadableInventoryItem {
+  readonly instanceId: string;
+  readonly itemId: string;
+  readonly readableTextId?: string | null;
+  readonly readableText?: string | null;
+}
+
+export interface ResidentAiMemory {
+  readonly processedThroughSequence: number;
+  readonly entries: readonly ResidentAiMemoryEntry[];
+}
+
+export interface ResidentAiMemoryEntry {
+  readonly sequence: number;
+  readonly eventId: string;
+  readonly kind: string;
+  readonly text: string;
+  readonly importance: 'priority' | 'recent';
 }
 
 export interface ModelBinding {
@@ -43,7 +76,10 @@ export interface ModelBinding {
   readonly model: string | null;
   readonly fallbackModels: readonly string[];
   readonly maxInputTokens: number | null;
-  readonly maxOutputTokens: number | null;
+  /** Per-card character budget for the assembled prompt; legacy bindings default to 8000. */
+  readonly maxContextCharacters?: number;
+  /** Legacy persisted property; current bindings omit it. */
+  readonly maxOutputTokens?: number | null;
   readonly updatedAt: string | null;
   readonly credentialRef: string | null;
   readonly modelSizeB?: number | null;
@@ -63,11 +99,35 @@ export interface DungeonLocation {
   readonly cellId: string;
 }
 
+export interface DungeonRuntimeState {
+  readonly schemaVersion: 1;
+  readonly tripId: string;
+  readonly activeFloor: number;
+  readonly cellByActorId: Readonly<Record<string, string>>;
+  readonly unlockedFloorByActorId: Readonly<Record<string, number>>;
+  readonly visitedCells: readonly string[];
+  readonly activeEncounterByCell: Readonly<Record<string, DungeonEncounterState>>;
+  readonly routeByActorId?: Readonly<Record<string, readonly string[]>>;
+}
+
+export interface DungeonEncounterState {
+  readonly encounterId: string;
+  readonly monsterIds: readonly string[];
+}
+
+export type SurfaceTerrain = 'beach' | 'forest' | 'river' | 'rock';
+export type SurfaceTerrainClassification = SurfaceTerrain | 'unclassified' | 'coconut-beach' | 'dungeon-entrance' | 'port' | 'monument-valley';
+
 export interface WorldNode {
   readonly id: string;
   readonly label: string | null;
   readonly labelStatus: string;
   readonly visualType: string;
+  readonly surfaceTerrain: SurfaceTerrainClassification | null;
+  readonly isStartingLocation?: boolean;
+  readonly daySurfaceEntryEventsEnabled?: boolean;
+  readonly regionDescription?: string;
+  readonly mapPosition?: Readonly<{ x: number | null; y: number | null }>;
   readonly neighbors: readonly string[];
   readonly safe: boolean | null;
 }
@@ -75,7 +135,14 @@ export interface WorldNode {
 export interface WorldObject {
   readonly id: string;
   readonly itemId: string | null;
-  readonly objectType?: 'item' | 'corpse';
+  readonly objectType?: 'item' | 'corpse' | 'container';
+  readonly readableTextId?: string | null;
+  /** Snapshot bound to this physical readable item on first read; keeps pool draws stable across later reads and content edits. */
+  readonly readableText?: string | null;
+  readonly managedBy?: 'node-notices';
+  readonly managedNoticeKey?: string;
+  readonly containerSourceId?: string | null;
+  readonly dungeonLocation?: DungeonLocation | null;
   readonly remainsActorId?: string | null;
   readonly corpseId?: string | null;
   readonly ownerActorId: string | null;
@@ -84,24 +151,43 @@ export interface WorldObject {
   readonly expiresAtT: number | null;
   readonly unique: boolean;
   readonly provisional: boolean;
+  readonly lit?: boolean;
+  /** Scene object placed by a resident's use action; unlike ordinary ground drops, it cannot be picked up. */
+  readonly placed?: boolean;
 }
 
 export interface WorldState {
   readonly schemaVersion: 1 | 2;
+  readonly mapId?: string;
   readonly sequence: number;
   readonly contentVersion: string;
   readonly worldTimeT: number;
+  readonly residentCount?: number;
   readonly seed: string;
   readonly rngState: string;
   readonly actors: Readonly<Record<string, WorldActor>>;
   readonly nodes: Readonly<Record<string, WorldNode>>;
   readonly objects: Readonly<Record<string, WorldObject>>;
+  /** Permanent free-text inscriptions for this world session; separate from shared book and bottle pools. */
+  readonly monumentValleyInscriptionPool?: readonly MonumentValleyInscription[];
   readonly bootstrapRandomDraws?: readonly RandomDraw[];
   readonly unresolved?: readonly UnresolvedIssue[];
   readonly privateLifeData?: Readonly<Record<string, PrivateLifeRecord>>;
+  /** Player-only notes keyed by the public action event ID; never part of event payloads or resident prompts. */
+  readonly privateEventIntents?: Readonly<Record<string, string>>;
   readonly surfaceStocks?: SurfaceStockState;
   readonly pendingTradeOffers?: Readonly<Record<string, TradeOfferState>>;
   readonly uniqueOwnerByItemId?: Readonly<Record<string, string>>;
+  readonly destroyedNodeNoticeKeys?: readonly string[];
+  readonly dungeonRuntime?: DungeonRuntimeState;
+}
+
+export interface MonumentValleyInscription {
+  readonly id: string;
+  readonly poolId: 'monument-valley';
+  readonly text: string;
+  readonly authorActorId: string;
+  readonly createdAtT: number;
 }
 
 export interface SurfaceStockState {
@@ -118,7 +204,7 @@ export interface TradeOfferState {
   readonly offeredItemId: string;
   readonly requestedItemId: string;
   readonly createdAtT: number;
-  readonly status: 'pending';
+  readonly status: 'pending' | 'accepted' | 'rejected';
 }
 
 export interface PrivateLifeRecord {
@@ -151,6 +237,7 @@ export interface ActionProposal {
   readonly timeCostT: 1 | 3;
   readonly payload: JsonValue;
   readonly intent?: string;
+  readonly text?: string;
 }
 
 export interface ActionDefinition {

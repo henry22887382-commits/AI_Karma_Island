@@ -1,6 +1,6 @@
 # Project Branding｜輪迴島
 
-**版本：** 草稿 0.2｜**狀態：** 使用者於 2026-10-20 指示「執行cookie」，授權依現有 7 Bags／17 Cookies 範圍執行；使用者後續決策依 D-013–D-017 同步；其他未決項仍維持待核｜**Reference：** 使用者指定的 `輪迴島_完整規格文件組_2026-10-20_岩縫確認版 (1).zip`（位於 `C:\Users\Henry\Downloads\`）。Reference 是來源資料；後續明確使用者決策優先並可覆寫來源或本計畫先前解讀。本文件是執行範圍與驗收契約；實作證據另記於 [EXECUTION_LOG.md](EXECUTION_LOG.md)。
+**版本：** 草稿 0.3｜**狀態：** 原執行計畫為 7 Bags／17 Cookies；使用者另授權新增 Cookie 7.3，舊範圍共 7 Bags／18 Cookies，既有執行紀錄中的 18 DONE 僅代表當時已審範圍。依本次使用者要求，現行計畫新增 Cookie 6.3 並擴充 7.3，共 7 Bags／19 Cookies；舊 DONE 不代表新範圍已驗收。Cookie 7.3 原範圍及擴充的獨立地圖 profile／mapId Crumbs 已按明列條件核對通過並列 DONE（2026-10-25）；未做 browser E2E，該項不是Crumb明列門檻。證據見 [EXECUTION_LOG.md](EXECUTION_LOG.md) 與 [COOKIE_REVIEW.md](COOKIE_REVIEW.md)。本輪不要求DNS或子域設定。AI提示文本與回傳格式個人化微調保留為獨立後續項｜**Reference：** 使用者指定的 `輪迴島_完整規格文件組_2026-10-20_岩縫確認版 (1).zip`（位於 `C:\Users\Henry\Downloads\`）。Reference 是來源資料；後續明確使用者決策優先並可覆寫來源或本計畫先前解讀。本文件是執行範圍與驗收契約；實作證據另記於 [EXECUTION_LOG.md](EXECUTION_LOG.md)。
 
 ## 產品經理／工程師／專業顧問合理性檢視
 
@@ -19,7 +19,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 ## 規格現況與保留原則
 
 - **現行規格主軸：** 72 T／日（白 48、夜 24）、小行動 1T／大行動 3T、獨立 `next_action_at` 排程；十名居民，初始 30 HP；普通地面物與未開容器生成後 72T 到期，屍體、唯一勇者物品和自然椰子庫存有明列例外。
-- **玩法覆蓋：** 28 Node／51 條無向邊；地表生存、釣魚、河流與岩石探索；三層地牢主事件池；普通怪、Boss、戰鬥資源與掉落；公開非同步短訊、交易、死亡傳記、碑文與閱讀。
+- **玩法覆蓋：** 28 Node／51 條無向邊；地表生存、釣魚、河流與岩石探索；三層地牢主事件池；普通怪、Boss、戰鬥資源與掉落；公開非同步短訊、依決策停用的交易、死亡傳記、碑文與閱讀。
 - **工程方向：** 本機 Node.js + TypeScript、SQLite、網路模型 API Router 是 Reference 的收案基線；仍需按正式核准的 Bag 範圍實作。欄位名稱示例不是資料庫 schema 核准。
 - **UI 原則：** 可看世界全貌與玩家視角資料；可暫停、恢復、調速；不代替居民行動。使用者已指定單一視窗內採可切換頁面壓縮資訊，並試作格子與字體動態調整；其他未指定的美術與動畫不自行擴張。
 - **維護原則：** 保留 Reference 路徑、來源狀態、歷史覆寫與未決項；物品別名、機率與互動映射不得自行補值。各 Bag 的輸入、輸出和依賴須可互相核對。
@@ -34,7 +34,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 
 **Purpose:** 建立世界時間、獨立行動排程及一致的客觀狀態結算。  
 **Why grouped:** 時鐘、排程和事件原子性共同決定所有領域行動何時發生及其結果。  
-**Dependencies:** D-001 授權已生效；同時刻排序依 D-013 已明確定義，實作仍須驗證；WAIT 時長等其他未決細節不以預設值填入。
+**Dependencies:** D-001 授權已生效；同時刻排序依 D-013 已明確定義，實作仍須驗證；WAIT 已由使用者於 2026-10-21 決定為 1T。
 
 #### Bag Label
 
@@ -43,7 +43,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Inputs:** 世界初始狀態、合法行動及 `time_cost`、定時世界事件、領域 Cookie 的結算請求。
 - **Outputs:** 單調時間、可行動實體順序、結算事件及供持久化使用的狀態變更。
 - **Allowed Changes:** 在核准規格內實作整數 T、每日／晝夜邊界、1T／3T 成本和已定案的同時刻速度排序。
-- **Forbidden Changes:** 改變已定案時間成本、加固定世界輪、讓速度縮短等待，或自行決定未定 WAIT 規則。
+- **Forbidden Changes:** 改變已定案時間成本、加固定世界輪、讓速度縮短等待，或改變已核准的 WAIT 1T。
 - **Dependencies:** Bag 5 持久化需接受世界事件；Bag 2–4 提供其行動與事件契約。
 - **Completion Condition:** 所有排程 Cookie 通過其 Crumbs，且世界事件、行動成本、死亡退出和定時事件可一致結算。
 - **Rotten Conditions:** 實作前提要求退回 24 輪／同步回合、速度縮短冷卻，或必須填入尚未核准的平手／WAIT 規則。
@@ -55,9 +55,9 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Goal:** 依整數 T 執行 72T 日界線、48T 白天／24T 夜晚及獨立參與者等待。
 - **Inputs:** 居民／怪物狀態、行動成本、速度、夜間和日界線事件；Reference 02、05、09、13。
 - **Allowed touch points:** 世界時鐘、排程器及領域可呼叫的排程介面。
-- **Dependencies:** 核准時鐘規則；同 SPD tie-break 依 D-013，WAIT 的具體選項仍保持未定。
+- **Dependencies:** 核准時鐘規則；同 SPD tie-break 依 D-013；WAIT 成本固定為 1T。
 - **Expected output:** 可重播的排程結果和每一行動的時間推進紀錄。
-- **Crumbs:** 72T 推進一日且前 48T 為白天、後 24T 為夜間；SLEEP 僅夜間可用並持續至下一個天亮；睡眠遭攻擊先結算傷害與死亡，存活才驚醒；1T/3T 行動只更新該實體下次可行動時間；同時點先按 SPD 降序，再依 HP、飽食、睡眠資源、攻擊、防禦、背包空格數依序降序；以上全同才以已記錄的世界 seed 抽籤，且可重播；死亡實體離開佇列；安全區睡眠不觸發額外睡眠風險；不安全區睡眠額外危險逐人檢查，以各人進入該區域的判定時點為起算錨點，每 3T 一次；完整睡滿 24T 共 8 次。夜間非野外睡眠的負面事件保持既有相對權重，按比例縮放至森林夜間負面總率17.5%（各項`P_i=0.175*w_i/sum(w_negative)`），不改變進區事件表；不存在獨立全域固定8次計時器；一般進區／探索危險仍按原規則獨立觸發。
+- **Crumbs:** WAIT 行動成本固定1T；72T推進一日且前48T為白天、後24T為夜間；SLEEP僅夜間可用並持續至下一個天亮；睡眠遭攻擊先結算傷害與死亡，存活才驚醒；1T/3T行動只更新該實體下次可行動時間。移動行動仍耗3T；角色輪到該移動行動時於同一結算立即更新至目標Node，夜間先依地形抽遇敵率（沙灘30%、森林35%、河流35%、岩石區30%），命中無視防禦扣1HP並按夜間蝙蝠:夜狼=4:6選敵，結束本次地表事件；未命中才抽原地形池，兩池不合併。危險區睡眠逐人以所在Node率每3T抽一次，不抽地形池；已點燃且仍在保護時效內的營火Node跳過。睡眠命中先固定扣1HP，存活者才醒來處理遇敵；本次固定傷害只扣一次，後續怪物攻擊獨立結算。舊「非野外夜間睡眠正規化至17.5%」已被2026-10-21修正版取代。怪物依來源參數表加入世界行動排程，每次行動冷卻1T，結果以公開事件回饋同Node居民／AI。角色行動按時點推進、同時點按SPD降序；居民同SPD依HP、飽食、睡眠資源、攻擊、防禦、背包空格數降序，完全平手依記錄seed抽籤；跨類型相同SPD目前無核准tie-break，須保持unresolved。死亡實體離開佇列；不存在獨立全域固定8次計時器。
 - **Rotten if:** 實作將其他角色行動同步到固定回合、將 3T 行動拆成免費的多次角色行動，或把速度用作縮短等待。
 
 ##### Cookie 1.2：原子世界結算與物件生命週期
@@ -117,7 +117,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Allowed touch points:** 地表事件表、探索行動結果及風險結算。
 - **Dependencies:** Bag 1 行動成本／定時結算；Bag 2.1 地形標籤；Bag 3 戰鬥遭遇。
 - **Expected output:** 各地表行動獨立且來源狀態可追溯的抽取池。
-- **Crumbs:** 釣魚主池總和 100%，雜物率 12/4/2/2 為整體率；岩石資源池 5/5/90，日夜探索 HP／睡眠風險為獨立抽取；安全區睡眠不觸發額外睡眠風險，不安全區域睡眠風險依 Cookie 1.1 逐人每 3T 判定；森林Node進入事件白天觸發15%、負面占35%（總負面5.25%），夜間觸發25%、負面占70%（總負面17.5%），原Node無其他島民時才判定，夜間只調整同一事件池負面占比、不額外重抽；夜間非野外睡眠區域則將原有負面結果相對權重正規化至總負面17.5%，不改一般進區表；森林進區池與主動採集野莓90/10（Reference早期80/20保留為歷史差異）、河流魚池20/5/75分開；使用者採用的魚站Node 2/10/14、椰子Node 1/8/13（初始0、每日+1、上限3）依位置設定執行，不偽稱是地圖直接標定；自然椰子庫存不過期；未確認海浪、河口、野豬生成率等不產生假機率。森林／石堆／河流Node類別按來源分組對應保留證據等級。
+- **Crumbs:** 釣魚主池總和 100%，雜物率 12/4/2/2 為整體率；岩石資源池 5/5/90，日夜探索 HP／睡眠風險為獨立抽取；夜間移動抵達Node時先依地形抽遇敵率：沙灘30%、森林35%、河流35%、岩石區30%；命中無視防禦固定扣1HP，按夜間蝙蝠:夜狼=4:6選敵並結束本次地表事件，未命中才抽原地形池且兩池不合併。危險區睡眠依 Cookie 1.1 每3T使用所在Node遇敵率判定，不抽地形池；已點燃且仍在保護時效內的營火Node跳過；命中先扣1HP，存活才醒來處理遇敵，此傷害只扣一次且和怪物後續攻擊分開。森林原地形池白天15%觸發、條件負面35%（總負面5.25%）；其夜間池僅在新地形遇敵抽取失敗後判定，仍與主動採集野莓90/10分開（Reference早期80/20保留為歷史差異）。河流魚池20/5/75分開；使用者採用的魚站Node 2/10/14、椰子Node 1/8/13（初始0、每日+1、上限3）依位置設定執行，不偽稱是地圖直接標定；自然椰子庫存不過期；未確認海浪、河口、野豬生成率等不產生假機率。森林／石堆／河流Node類別按來源分組對應保留證據等級。舊「非野外夜間睡眠正規化至17.5%」與森林夜間率直接作為睡眠率的說法已取代。
 - **Rotten if:** 將早期岩縫 15/15/70 或 -1HP 併入現行抽池，或把互相獨立風險改為互斥結果。
 
 ### Bag 3：戰鬥、地牢與掉落
@@ -136,7 +136,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Forbidden Changes:** 把戰鬥改成獨立模式；把主事件與額外掉落池相加；以一般掉落複製唯一物件。
 - **Dependencies:** Bag 1 行動排程／結算，Bag 2 裝備和物品，Bag 5 事件持久化。
 - **Completion Condition:** 已定義的怪物、Boss、事件和掉落依來源結算；不確定內容以可追溯待核狀態隔離。
-- **Rotten Conditions:** 必須先自行指定龍傷害權重、第三層火山彈區外重分配、Boss2 命中／撤退規則或商品名別名才能繼續。
+- **Rotten Conditions:** 覆寫已核准的C-05–C-07／D-007規則，或把仍未提供的生成率、商品別名冒充為已確認來源值。
 
 #### Cookies
 
@@ -147,7 +147,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Allowed touch points:** 戰鬥狀態轉移、命中後傷害、目標選擇與撤退動作。
 - **Dependencies:** Bag 1.1/1.2；Bag 2.2 提供物品、防禦和唯一狀態。
 - **Expected output:** 每次合法戰鬥行動的客觀傷害、存活、死亡和物品結果。
-- **Crumbs:** 玩家命中傷害 `max(1, ATK-DEF)`；怪物對居民 `max(0, 原始傷害-總防禦)`；同時點先按 SPD 降序，SPD 同值依 D-013 比較 HP、飽食、睡眠資源、攻擊、防禦、背包空格數；多人目標依來源獨立選擇，龍息群體；撤退不可穿過阻路怪且黏液怪存活時禁止撤退；擊殺物品依最後一擊與包滿規則處理。
+- **Crumbs:** 玩家命中傷害 `max(1, ATK-DEF)`；怪物對居民 `max(0, 原始傷害-總防禦)`；怪物actor與居民依世界事件時間／SPD加入同一行動排程，普通怪每次行動後冷卻1T；同SPD居民依D-013比較HP、飽食、睡眠資源、攻擊、防禦、背包空格數，跨類型同SPD尚無核准tie-break並保持unresolved；多人目標依來源獨立選擇，龍息群體；撤退不可穿過阻路怪且黏液怪存活時禁止撤退；擊殺物品依最後一擊與包滿規則處理。戰鬥結果寫入公開事件並回饋同Node居民／AI。
 - **Rotten if:** 公式讓怪物傷害至少 1、傷害公式替代 1T 排程，或允許未定的免費反擊。
 
 ##### Cookie 3.2：普通怪、Boss 與特殊戰鬥行為
@@ -158,17 +158,17 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Dependencies:** Bag 3.1；Bag 2.2 唯一裝備與防具。
 - **Expected output:** 按版本化內容表執行的地表敵人、九種地牢怪及三個 Boss。
 - **Crumbs:** 每個已知攻擊分佈合計 100%；綠矮人／火翼蝙蝠召喚每場最多一隻；巨鼠／火翼蝙蝠雙擊各自抽傷；史萊姆反傷含致死擊且與普攻相加；Boss 勝利門檻及在場存活者資格不被錯發；森林野豬設計值保留為 user-request-derived，不偽稱來源舊值；居民相同 SPD 時依 D-013 欄位次序裁決先後。
-- **Rotten if:** 未定 Boss2 命中率適用方、龍傷害細分或熔岩噴濺權重被填入固定值。
+- **Rotten if:** 覆寫已核准的C-05–C-07規則，或將使用者衍生的森林野豬設計值冒稱為Reference原始數值。
 
 ##### Cookie 3.3：三層地牢事件、掉落與唯一物件
 
 - **Goal:** 以分離的主事件池及來源掉落池產生地牢事件和獎勵。
-- **Inputs:** Reference 00、03、04、07、07A、11、13；`dungeon_events.csv`、`monster_bonus_drops.csv`、三份容器 CSV。
+- **Inputs:** Reference 00、03、04、07、07A、11、13；`dungeon_events.csv`、`monster_bonus_drops.csv`、三份封存容器比例CSV與兩份專案維護的身份/catalog CSV。
 - **Allowed touch points:** 樓層／Node 事件表、掉落表、唯一裝備登記與通行權限。
 - **Dependencies:** Bag 3.1–3.2；Bag 2.2 物件實體；Bag 1.2 原子性。
 - **Expected output:** 每個適格空 Boss Node 進入事件、條件獎勵及抽取來源記錄。
-- **Crumbs:** 每層主事件合計 100%；直遇普通怪 50%；第二層濕滑水道額外遭遇不從 50% 扣；三層火山彈只在 A1/B1/C1；九怪額外掉落各列明確總率正確且不與勇者劍條件保證掉落混池；容器 7×分類和46項有效率依雙層比例計算且狀態保留 provisional one item；勇者裝備全世界唯一，只有實體真正不可取回才准依來源回歸。
-- **Rotten if:** 需把第一排以外第三層 8% 權重作未核准重分配，或將暫定容器件數、別名和掉落原文提升為定案。
+- **Crumbs:** 每層主事件合計 100%；直遇普通怪 50%；第二層濕滑水道額外遭遇不從 50% 扣；三層火山彈只在 A1/B1/C1；九怪額外掉落各列明確總率正確且不與勇者劍條件保證掉落混池；容器 7×分類和46項有效率依雙層比例計算，所有含物品容器恰出一件；勇者裝備全世界唯一，只有實體真正不可取回才准依來源回歸。
+- **Rotten if:** 未經核准重分配第一排以外第三層8%權重，或改寫容器池原始label。D-006「全部含物品的容器每個都一件」及D-007的現行8pp均分均已於2026-10-22由使用者明確核准；物品ID映射與缺項最小定義亦已核准，需依`container_item_identities.csv`保留來源label並使用單一inventory ID。
 
 ### Bag 4：AI Router、合法動作與居民交流
 
@@ -179,13 +179,13 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 #### Bag Label
 
 - **Purpose:** 模型只提交合法選擇；世界真相由核心結算，模型訊息依公開及視野規則傳遞。
-- **Owns:** Router 模型配置與備援、提示輸入格式、JSON 驗證、個人意圖、短訊、交易請求／回覆。
+- **Owns:** Router 模型配置與備援、現行提示輸入與JSON驗證、個人意圖及公開短訊；交易目前依使用者決定停用。正式遊戲文本內容由Cookie 7.1維護；AI文本與回傳格式的後續微調由Cookie 7.3承接。
 - **Inputs:** 當前居民狀態、Node 報幕、合法動作列表、模型端點與可見事件。
-- **Outputs:** 綁定當前合法動作的選擇、Router 呼叫紀錄、短訊／交易世界事件。
+- **Outputs:** 綁定當前合法動作的選擇、Router 呼叫紀錄及公開短訊世界事件。
 - **Allowed Changes:** 依核准提示契約組裝輸入、驗證輸出並以固定錯誤規則回復。
 - **Forbidden Changes:** 模型直接改世界狀態、出現獨立 combat/聊天室、模型間不同玩法提示或免費長談。
 - **Dependencies:** Bag 1 行動時間與原子事件；Bag 2–3 動作定義；Bag 5 記憶和歷史邊界。
-- **Completion Condition:** 所有模型輸入遵守可見資料邊界，輸出經驗證後只能觸發合法動作，溝通和交易按 1T 成本結算。
+- **Completion Condition:** 所有模型輸入遵守可見資料邊界，輸出經驗證後只能觸發合法動作；公開短訊按既定成本結算，停用交易不得由proposal繞過合法動作校驗。
 - **Rotten Conditions:** 備援選模、訊息跨 Node 可見範圍或身份記憶規則需要未核准的新定義才能執行。
 
 #### Cookies
@@ -197,17 +197,17 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Allowed touch points:** Router 輸入組裝、合法動作快照與輸出驗證。
 - **Dependencies:** Bag 1 客觀結算；Bag 5 個人上下文與世界歷史分流。
 - **Expected output:** 中立中文報幕、當前唯一 JSON 快照及通過驗證的 `action_id`/`intent`/必要 `text`。
-- **Crumbs:** AI 只可選本輪列出的 action ID；`intent` ≤30 字、自由文字 ≤50 字；visible actor type 僅 human/animal/monster；不給他人精確 HP/背包、隱藏裝備值或整數時間；移動中不屬於 Node；當前 JSON 替換舊快照；物件文字需 READ 後才呈現；JSON 不合法或 ID 錯誤不重試且愣神 1T；報幕保留當輪所有符合條件事件與持續狀態。
+- **Crumbs:** AI 只可選本輪列出的 action ID；`intent` ≤30 字、自由文字 ≤50 字；visible actor type 僅 human/animal/monster；不給他人精確 HP/背包、隱藏裝備值或整數時間；移動中不屬於 Node；當前 JSON 替換舊快照；已配置的非空物件文字需 READ 後才呈現；JSON 不合法或 ID 錯誤不重試且愣神 1T；報幕保留當輪所有符合條件事件與持續狀態。正式物件文字的撰寫／來源維護歸Cookie 7.1，不因空白內容阻擋本Cookie；現行AI提示與回傳格式維持可運行版本，未來微調歸Cookie 7.3。
 - **Rotten if:** 模型回覆被當成物理結果，或提示自行加入來源沒有的教學、策略或固定人格。
 
-##### Cookie 4.2：公開非同步短訊與交易
+##### Cookie 4.2：公開非同步短訊；交易依使用者決定停用
 
-- **Goal:** 以一般合法行動實現公開短訊及物品交易，不鎖住參與者。
+- **Goal:** 以一般合法行動實現公開短訊，不鎖住參與者；交易依使用者決定停用。
 - **Inputs:** Reference 00、02、08、09、11、14；Bag 1 排程；Bag 2 物件所有權。
-- **Allowed touch points:** TALK/交易類動作輸出、事件可見性與物品原子移轉介面。
+- **Allowed touch points:** TALK類動作輸出與事件可見性；交易類action不得提供。
 - **Dependencies:** Bag 1 1T 排程、Bag 5 事件持久化。
-- **Expected output:** 發話、收件、回覆、交易請求和回應的公開客觀事件。
-- **Crumbs:** 發話與回覆各耗 1T；收件者下次行動看到、閱讀不耗動作；旁觀者依已核准可見邊界讀取；訊息不鎖人、不強制回覆；交易請求/回應均耗動作且物品不可因競態複製；跨 Node 即時傳播範圍保持未決。
+- **Expected output:** 公開短訊的客觀事件；不產生交易請求／接受／拒絕事件。
+- **Crumbs:** 發話與回覆各耗 1T；收件者下次行動看到、閱讀不耗動作；旁觀者依已核准可見邊界讀取；訊息不鎖人、不強制回覆；交易action不出現在合法清單，偽造proposal亦不能繞過校驗；丟棄物品與公開短訊仍可用；跨 Node 即時傳播範圍保持未決。交易停用為已決政策，不列待完成事項。
 - **Rotten if:** 實作必須先定義同 Node/目擊/全島可見的選項，或恢復私密握手聊天。
 
 ##### Cookie 4.3：模型備援、重試與費用上限
@@ -217,7 +217,7 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Allowed touch points:** Router 錯誤處理、模型切換計數、成本紀錄與硬上限。
 - **Dependencies:** Bag 4.1 合法回覆分類；正式備援選擇演算法與當前價格需另外核准／查證。
 - **Expected output:** 有來源邊界的模型呼叫、備援及成本日誌。
-- **Crumbs:** 前台提供 10 個可配置 provider/model/fallback/價格/API key 設定槽，不預選 live AI；API key 僅於 server 記憶體使用且不進 WorldState；傳輸錯誤最多額外重試2次且不扣遊戲 T；格式／ID錯誤不重試且扣1T；原模型連續三次呼叫失敗時轉使用者配置的備援；備援完成10次有效行動後才測原模型；記錄 prompt/output/重試/訊息/傳記成本，月上限 US$20；不可套用舊 240 次/日或 2026-10-19 報價當現況。
+- **Crumbs:** 前台提供 10 個可配置 provider/model/fallback/價格/API key 設定槽，不預選 live AI；API key 僅於 server 記憶體使用且不進 WorldState；傳輸錯誤最多額外重試2次且不扣遊戲 T；格式／ID錯誤不重試且扣1T；原模型連續三次呼叫失敗時轉使用者配置的備援；備援完成10次有效行動後才測原模型；記錄 prompt/output/重試/訊息/傳記成本，月上限 US$20；不可套用舊 240 次/日或 2026-10-19 報價當現況。Biography模型保留空白、由使用者日後手動設定的可選配置位置；未設定時不觸發模型呼叫、不自動生成傳記；此設定不改動AI輸出契約。
 - **Rotten if:** 備援模型挑選或成本資料被當作已從 Reference 定義，或成本控制允許超過硬上限。
 
 ### Bag 5：持久化、客觀歷史與居民身後資料
@@ -269,13 +269,13 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 #### Bag Label
 
 - **Purpose:** 提供可用且清楚的唯讀觀察入口，不提供居民操控介面。
-- **Owns:** 單一視窗內的可切換資訊頁面、主島圖、人物檢視、資源／事件／訊息／時間線／傳記、模型設定入口與暫停恢復調速控制。
-- **Inputs:** Bag 2 主島與資源、Bag 5 客觀事件與玩家可見查詢、世界時鐘狀態。
-- **Outputs:** 玩家可讀的世界觀察畫面及模擬運行控制請求。
-- **Allowed Changes:** 依使用者指定建立單窗切換頁面，試作格子與字體動態調整；其他未知視覺規格以最小可用實作處理。
+- **Owns:** 單一視窗內的可切換資訊頁面、主島圖、人物檢視、資源／事件／訊息／時間線／傳記、模型設定入口、開局準備頁及居民模型／死亡總結模型卡／地圖選擇，以及暫停恢復調速控制。
+- **Inputs:** Bag 2 主島與所選地圖圖資料、Bag 5 客觀事件／存檔身分與玩家可見查詢、世界時鐘狀態、Bag 7 可用模型卡與地圖清單。
+- **Outputs:** 玩家可讀的世界觀察畫面、開局前設定選擇及模擬運行控制請求；已開始遊戲的地圖身分隨本局保持一致。
+- **Allowed Changes:** 依使用者指定建立單窗切換頁面，試作格子與字體動態調整；新增可展開／收合的開局左側設定區，並逐一檢核所有 app 頁面在寬／窄畫面下的可讀性，只修正實際發現的文字裁切／溢出、標籤對應、行高、資訊密度或層級問題；沒有問題時記錄檢核結果，不擴張成視覺改版。其他未知視覺規格以最小可用實作處理。
 - **Forbidden Changes:** 直接替居民下指令、改結算規則、把地圖草圖當最終美術指引或新增未來源支持的面板功能。
 - **Dependencies:** Bag 2.1 節點圖；Bag 5 查詢與權限；Bag 1 控制邊界。
-- **Completion Condition:** 玩家可定位 Node、查看角色和世界時間線、追溯傳記並控制模擬運行；資訊不洩漏到 AI。
+- **Completion Condition:** 玩家可定位 Node、查看角色和世界時間線、追溯傳記並控制模擬運行；開局前可從可收合區設定居民模型卡、死亡總結模型卡和地圖；所有 app 頁面完成寬／窄畫面可讀性檢核，實際問題修正或記錄無問題結果；資訊不洩漏到 AI。
 - **Rotten Conditions:** 開發須先選定原文未保存的版面、視覺風格或動畫才能交付明確範圍。
 
 #### Cookies
@@ -300,6 +300,16 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Crumbs:** 時間線只顯示已結算客觀事件；短訊按已核准可見範圍呈現；傳記僅玩家可見且不修改世界；有暫停、恢復和調速入口；在單一視窗以可切換頁面壓縮資訊；提供 10 個模型設定槽，可配置 provider、model、fallback、價格及 API key，不預選 live AI；key 僅在 server 記憶體使用且不寫入 WorldState；格子與字體大小可動態調整試用。
 - **Rotten if:** 需把 intent 當事件、跨 Node 短訊當已批准公告，或添加未來源支持的美術/互動功能。
 
+##### Cookie 6.3：開局設定與全頁可讀性檢核
+
+- **Goal:** 在開始頁左側提供精簡、可展開／收合的本局設定，並核對所有 app 頁面的資訊是否清楚可讀。
+- **Inputs:** Bag 7 的可用模型卡／地圖清單、Bag 2 地圖資料、Bag 5 本局及存檔身分、現有 app 頁面與可用視窗寬度。
+- **Allowed touch points:** 開始／準備頁、居民模型卡分配、死亡總結模型卡選擇、地圖選擇及展開／收合狀態；所有 app 頁面的版面、文字、表單標籤與響應式樣式。
+- **Dependencies:** Bag 7.3 提供可選且穩定識別的地圖 profile 與編輯器保存結果；Bag 2 可依選定 map ID 提供圖資料；Bag 5 可將本局 map ID 與存檔關聯。
+- **Expected output:** 玩家能在開局前辨識並選擇居民模型卡、死亡總結模型卡和地圖，收合後保持頁面乾淨；整套 app 頁面有可追溯的寬／窄畫面可讀性檢核結果。
+- **Crumbs:** 開始前可展開左側設定並分別選擇居民模型卡、總結者模型卡與已保存地圖；關閉後不遮擋主要開局內容；開始後地圖選擇不改寫當局 map ID。逐一列出並檢核所有實際 app 頁面，在寬桌面與窄視窗檢查主要文字、欄位標籤、按鈕、選單與狀態資訊；實際發現的溢出、裁切、標籤錯配、行高／密度或層級問題須修正並留下頁面／畫面範圍證據；若無可讀性問題，記錄檢查範圍及「未發現需修正項」，不為符合 Cookie 而製造 UI 變更。既有只讀觀察權限、模型輸入可見範圍、保存和控制邊界不變。
+- **Rotten if:** 選擇器讓本局中途切換地圖、將玩家全知資料送給 AI，或以全站重設樣式取代對實際可讀性問題的針對修正。
+
 ### Bag 7：整合、驗收與可維護內容
 
 **Purpose:** 驗證跨 Bag 契約、隨機結果、成本和來源未決邊界，讓後續接手者可查。  
@@ -308,25 +318,25 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 #### Bag Label
 
 - **Purpose:** 在各領域具備可驗收結果後檢查整體交互和來源覆蓋。
-- **Owns:** 跨 Bag 驗收案例、來源到 Cookie/Crumb 索引、內容版本／使用說明及運行成本核對。
-- **Inputs:** 所有 Bag 的結果、CSV 內容、未決項及決策紀錄。
-- **Outputs:** 可重跑的整合驗收證據、來源追溯和已知限制清單。
-- **Allowed Changes:** 建立核准範圍內的驗收與可接手文件；把不完整證據標為待核，不得宣稱完成。
+- **Owns:** 跨 Bag 驗收案例、來源到 Cookie/Crumb 索引、內容版本／使用說明、地圖 profile 的持久化契約及運行成本核對。
+- **Inputs:** 所有 Bag 的結果、地圖 profile 與本局 map ID、CSV／資料庫內容、未決項及決策紀錄。
+- **Outputs:** 可重跑的整合驗收證據、來源追溯、地圖／存檔相容約定和已知限制清單。
+- **Allowed Changes:** 建立核准範圍內的驗收、地圖編輯與保存、profile管理及可接手文件；把不完整證據標為待核，不得宣稱完成。
 - **Forbidden Changes:** 用模擬測試證據宣稱實際 API／UI／部署驗證，或藉驗收重寫正式規格。
 - **Dependencies:** Bag 1–6 已各自有可觀察輸出；尚未核准的正式定義不能轉成 PASS 條件。
-- **Completion Condition:** 跨 Bag 核心契約可檢查且缺口對應到來源／決策，不以本計畫取代實際實作驗證。
+- **Completion Condition:** 跨 Bag 核心契約可檢查且缺口對應到來源／決策；多地圖 profile、遊戲選用與存檔讀回遵守同一 map ID 契約；所有已要求的 app 頁面可讀性 Cookie 有獨立 Review 結果；不以本計畫取代實際實作驗證。
 - **Rotten Conditions:** 證據不存在或受未核准假設支配，卻要求宣稱完整實作或實際運行通過。
 
 #### Cookies
 
-##### Cookie 7.1：跨 Bag 契約與端到端模擬驗收
+##### Cookie 7.1：跨 Bag 契約、端到端模擬驗收與正式文本維護
 
-- **Goal:** 驗證排程、世界事件、持久化、模型介面和觀察 UI 的相互契約。
+- **Goal:** 驗證排程、世界事件、持久化、模型介面和觀察 UI 的相互契約；接收使用者提供的正式遊戲文本並維持來源映射。
 - **Inputs:** Reference 09–11、13–15；Bag 1–6 計畫與核准 Crumbs。
-- **Allowed touch points:** 整合驗收案例、重播記錄和來源涵蓋索引。
+- **Allowed touch points:** 整合驗收案例、重播記錄、來源涵蓋索引，以及使用者提供文本的寫入／映射；不得自行創作正式敘事或掉落文本。
 - **Dependencies:** 相關 Bag 先具備可驗收輸出；正式決策先經使用者核准。
-- **Expected output:** 分清可由規格驗算的條件、需執行後才可驗證的條件及仍待來源補充的項目。
-- **Crumbs:** 驗收涵蓋 72T 排程、分層事件池、唯一裝備、權限可見性、隨機重播、客觀歷史與 UI 只讀邊界；計畫審查只宣稱規劃契約檢查，不宣稱程式、API、瀏覽器或長期平衡已通過；所有未決項可追到 D 編號或 Reference 路徑。
+- **Expected output:** 分清可由規格驗算的條件、需執行後才可驗證的條件及仍待來源補充的項目；使用者提供的遊戲文本可追溯地落入正式資料與物件映射。
+- **Crumbs:** 驗收涵蓋 72T 排程、分層事件池、唯一裝備、權限可見性、隨機重播、客觀歷史與 UI 只讀邊界；計畫審查只宣稱規劃契約檢查，不宣稱程式、API、瀏覽器或長期平衡已通過；所有未決項可追到 D 編號或 Reference 路徑。正式文字僅於使用者供稿後寫入；未供稿時維持空白，不製作假正文。此文本維護工作屬7.1，不屬4.1的AI/READ runtime驗收。
 - **Rotten if:** 以未執行的驗收案例宣稱系統行為通過，或用舊稿數值覆寫現行規格。
 
 ##### Cookie 7.2：來源內容與維護交接索引
@@ -336,19 +346,42 @@ Reference 是上述 ZIP 中的 19 份 Markdown、16 份 CSV 及原圖。ZIP 內�
 - **Allowed touch points:** Cookie 導航、資料欄位來源註記、回查清單與版本紀錄。
 - **Dependencies:** Project Branding／Design Decisions／Project Review 維持一致。
 - **Expected output:** 來源索引和可接手的規格維護約定。
-- **Crumbs:** 19 份 Markdown 和 16 份 CSV 皆有明確來源覆蓋；定案、核對摘要、推導、待回查、歷史作廢可區辨；歷史岩縫 15/15/70 標為 superseded，現行為 5/5/90；容器件數保留 provisional；沒有未來源功能。
+- **Crumbs:** 原始來源包19份 Markdown 和16份 CSV皆有明確來源覆蓋；定案、核對摘要、推導、待回查、歷史作廢可區辨；歷史岩縫15/15/70標為superseded，現行為5/5/90；D-006另有使用者確認覆寫為所有含物品容器每次一件；沒有未來源功能。
 - **Rotten if:** 來源文字在後續轉錄中失去來源狀態，或無法指出衍生值與原始值差異。
+
+##### Cookie 7.3：迷你品牌——Island 編輯器、獨立地圖存檔與地圖檢視切換（舊範圍及擴充 Crumbs DONE；AI 微調另列後續）
+
+- **Goal:** 維護既有同IP `/editor` 文本／地圖編輯器及主網域地表／地牢視圖；修正地圖保存流程，支援多張互相獨立、可命名與選用的島嶼地圖，並使本局選擇可與存檔一致。原 AI prompt／return-format 個人化微調保留為後續範圍，不納入本輪實作。
+- **Inputs:** 現有 island-sim 文本卡、Node／地圖及地牢拓樸資料、模型卡目錄與存檔資料層；同IP本機 `/editor` 路由。
+- **Allowed touch points:** 編輯器介面與 API、文本卡及書籍／漂流瓶分離資料池、Node 告示綁定、地圖編輯／保存／驗證／備份／匯入匯出、獨立地圖 profile 管理與本局地圖關聯；主網域地表／地牢地圖檢視切換及必要整合。地圖 profile 至少隔離節點、連線與告示綁定；現有全域文本卡／書籍／漂流瓶池維持共享，除非已有資料契約明確要求地圖專屬。不得把LAN可用性描述為公網正式部署，也不得改動現有 AI JSON 動作回傳格式作為本輪要求。
+- **Dependencies:** 可讀寫的編輯器資料來源、Bag 2 按 map ID 載入圖資料、Bag 5 將 map ID 與本局／快照保存及還原的接口，以及同IP服務路由；本輪不要求DNS或子域設定。
+- **Expected output:** 可編輯、保存、備份、驗證並匯入匯出文本卡及 Node／地圖資料的編輯器；地圖編輯器保存成功／失敗狀態清楚，保存錯誤不被靜默吞掉；多個具穩定 ID 的獨立地圖 profile；書籍與漂流瓶各自獨立的全域內容池；Node 告示綁定；主網域可切換地表／地牢地圖檢視；LAN同IP `/editor` 可匿名存取。新遊戲使用玩家選定 profile；讀取舊存檔缺 map ID 時採用既有預設地圖。此範圍不包含DNS／子域或正式外網部署要求。
+- **Crumbs:** `C-7.3-01` **DONE** — 編輯器可新增、編輯、刪除文本卡，`pool_type`及獨立pool資料保留書籍／漂流瓶分池；臨時目錄CSV保存重讀測試覆蓋CRUD與分池來源。`C-7.3-02` **DONE** — Node告示綁定寫入並重讀；runtime載入後建立READ action，往返測試驗證。`C-7.3-03` **DONE** — Node名稱／描述／座標及連線編輯通過CSV保存重讀測試；驗證、時間戳備份已由同測試驗證；JSON匯入／匯出操作已實作於編輯器。`C-7.3-04` **DONE** — 主網域觀察台提供地表／地牢切換與樓層選擇；observer測試驗證地圖視圖渲染，server handler解析選擇。`C-7.3-05` **DONE（本機LAN匿名路由已驗證）** — `http://192.168.0.120:4173/editor` 匿名頁面、editor API及observer API實測均回應200。此LAN服務為HTTP、無TLS。Nginx子域模板已移至資源回收桶；本輪不要求DNS／子域設定，也不宣稱公網或正式外網部署。以上為本輪Cookie範圍之DONE；AI prompt／return-format 個人化微調另列後續項，不屬本輪 Crumbs，也不阻擋本輪完成。
+- **Rotten if:** 書籍與漂流瓶共用或互相污染資料池；告示綁定、Node／地圖編輯或保存結果無法追溯；匯入／匯出、備份或驗證未涵蓋所承諾資料；地表／地牢檢視切換缺失；把LAN路由描述成公網正式部署完成；把未驗收項標為 DONE。
+
+- **擴充 Crumbs（DONE；2026-10-25驗收，不覆寫 C-7.3-01 至 05 的歷史證據）：** `C-7.3-06` 地圖編輯器保存操作能明確回報成功或失敗；缺少可選資料檔、驗證錯誤或寫入失敗不會靜默顯示成功，舊資料仍可恢復。`C-7.3-07` 可建立並保存多張具穩定 ID 的獨立地圖；各 profile 的 nodes、edges、node-notice bindings 讀寫不互相覆蓋，切換／重載後仍能辨識所選地圖。`C-7.3-08` 開始頁所選 map ID 與新局 session／snapshot 持久化並於讀檔還原，觀察台按該局 map ID 呈現相同地圖；沒有 map ID 的歷史存檔回退既有預設地圖。`C-7.3-09` 變更單張地圖不改寫其他地圖或共用文本池，跨 Bag mapId/storage contract 有可查證的整合證據。舊 C-7.3-01 至 05 的 DONE 僅限原先範圍，不能替代以上新 Crumbs 的 Review／驗收。2026-10-25補驗地圖保存UI失敗提示／dirty保留／重試、觀察台所選map呈現及舊存檔default-map fallback、map-only保存共享CSV不變，以及CSV已寫入而profile更新失敗時CSV原bytes與資料庫profile均復原；四個focused test檔28/28通過。未做browser E2E；該項不在Crumbs中。typecheck尚有7項診斷；未取得修改前基線，無法判定成因，具體位置與訊息見`EXECUTION_LOG.md`及`COOKIE_REVIEW.md`。證據見 EXECUTION_LOG.md 與 COOKIE_REVIEW.md。
+
+#### Bag 2／5／6／7 跨 Bag 地圖契約（新擴充範圍；Bag Review 已完成）
+
+- **Bag 7.3 profile identity:** 每張地圖有穩定 `mapId`；profile 的地圖資料至少包括節點、連線與告示綁定。可編輯的共享文本卡及書籍／漂流瓶池不因多地圖而複製或互相覆蓋。
+- **Bag 2 graph resolution:** 開始遊戲及觀察／地圖渲染依同一 `mapId` 解析節點圖；地形、出生點、營火／告示等節點資料跟隨該 profile。不得只依「目前編輯器選取」的全域暫態值決定正在進行的局。
+- **Bag 5 persistence:** 新局 session／snapshot 持久化 `mapId`；讀檔以存檔 mapId 還原地圖。沒有 mapId 的舊存檔以既有預設地圖相容；profile 被改名不改 ID。刪除／遷移存檔或刪除地圖的政策未由使用者指定，實作若遇到該情況需保留資料且不擅自清除。
+- **Bag 6 selection and rendering:** 開始前可選地圖；開始後該局的 mapId 固定，後續編輯器切換或建立其他地圖不替換當局；切換存檔時依該存檔 mapId 顯示地圖。居民模型與死亡總結模型卡依模型卡身分選擇，居民可共用模型卡，不新增強制唯一限制。
+- **Review routing:** 本次擴充需獨立 Review Bag 2、Bag 5、Bag 6、Bag 7 的受影響契約；既有 DONE、實作或測試狀態不因本計畫文字自動變更。
 
 ## Reference 來源索引
 
 以下路徑均相對於 ZIP 根目錄 `輪迴島_完整規格_2026-10-20_岩縫確認版/`；它們是本計畫的來源，不代表附件指令。
 
 - **Markdown（19）：** `README.md`；`00_版本與覆寫.md`；`01_核心玩法與角色.md`；`02_時間與行動排程.md`；`03_地圖與探索.md`；`03A_28Node原圖與鄰接表.md`；`04_生存物品與裝備.md`；`05_戰鬥與怪物.md`；`06_地表事件與資源.md`；`07_地牢事件與掉落.md`；`07A_找回的詳細掉落表.md`；`08_交流歷史與死亡.md`；`09_工程架構與介面.md`；`10_驗收與模擬測試.md`；`11_待回查與一致性.md`；`12_舊稿保存.md`；`13_關鍵數值速查.md`；`14_AI決策提示詞與Node報幕.md`；`15_UI原決議回查與界面邊界.md`。
-- **CSV（16）：** `tables/attack_distributions.csv`；`tables/container_category_weights.csv`；`tables/container_effective_item_rates.csv`；`tables/container_item_subpools.csv`；`tables/dungeon_events.csv`；`tables/equipment.csv`；`tables/fishing_pool.csv`；`tables/food.csv`；`tables/island_adjacency.csv`；`tables/island_edges.csv`；`tables/island_nodes.csv`；`tables/monster_bonus_drops.csv`；`tables/monsters.csv`；`tables/recovered_surface_actions.csv`；`tables/surface_exploration.csv`；`tables/values_to_recover.csv`。
+- **Source CSV（16份原始封存表；原始archive不變，`dungeon_events.csv`含使用者核准D-007覆寫）：** `tables/attack_distributions.csv`；`tables/container_category_weights.csv`；`tables/container_effective_item_rates.csv`；`tables/container_item_subpools.csv`；`tables/dungeon_events.csv`；`tables/equipment.csv`；`tables/fishing_pool.csv`；`tables/food.csv`；`tables/island_adjacency.csv`；`tables/island_edges.csv`；`tables/island_nodes.csv`；`tables/monster_bonus_drops.csv`；`tables/monsters.csv`；`tables/recovered_surface_actions.csv`；`tables/surface_exploration.csv`；`tables/values_to_recover.csv`。
+- **Project-maintained catalogs (2):** `tables/container_item_identities.csv` and `tables/functional_items.csv`; these are derived implementation catalogs, not archived source tables.
 - **圖像：** `assets/主島28Node原圖.png`；作拓樸視覺來源，非 UI 美術定案。
 
 ## 來源覆寫與待回查導航
 
 - **現行與作廢差異：** 00、12、README。24 輪／同步等待／免費聊天／每日固定死亡等舊說法均不生效；新規則為 72T 與獨立等待、短訊 1T。
 - **已找回資料：** 03A 的地圖拓樸；07A 的 9 怪額外掉落、7 容器分類與 20 子池／46 項；CSV 配套資料。
-- **未決且必保留：** 部分 Node 名稱、三個椰子沙灘 ID、地表事件和野豬生成率、短訊跨 Node 範圍、第三層非第一排火山彈機率、Boss/傷害分佈細節、物品別名、容器單件暫定、100+ 文獻原文及未指定的UI美術細節。單窗切換頁、資訊壓縮與動態格子／字體試作方向已由D-017決定；不得再列為等待提案核准。完整未知清單見 11 與 `values_to_recover.csv`。
+- **未決且必保留：** 部分 Node 名稱、三個椰子沙灘 ID、地表事件和野豬生成率、短訊跨 Node 範圍、Boss/傷害分佈細節、100+ 文獻原文及未指定的UI美術細節。D-006容器件數及D-007第三層事件率均已解決；單窗切換頁、資訊壓縮與動態格子／字體試作方向已由D-017決定；不得再列為等待提案核准。完整未知清單見 11 與 `values_to_recover.csv`。
+
+

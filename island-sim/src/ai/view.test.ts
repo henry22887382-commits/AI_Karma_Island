@@ -22,8 +22,8 @@ const state: WorldState = {
     '3.1': { id: '3.1', actorType: 'resident', alive: true, nodeId: '2', nextActionAtT: 49, speed: 1, unsafeEntryAtT: null, sleeping: false, hitPoints: 30, hunger: 5, sleep: 5, inventory: ['遠方私人物品'] },
   },
   nodes: {
-    '1': { id: '1', label: null, labelStatus: '未逐點命名', visualType: 'beach', neighbors: ['2'], safe: true },
-    '2': { id: '2', label: '遠方森林', labelStatus: 'confirmed', visualType: 'forest', neighbors: ['1'], safe: true },
+    '1': { id: '1', label: null, labelStatus: '未逐點命名', visualType: 'beach', surfaceTerrain: 'beach', neighbors: ['2'], safe: true },
+    '2': { id: '2', label: '遠方森林', labelStatus: 'confirmed', visualType: 'forest', surfaceTerrain: 'forest', neighbors: ['1'], safe: true },
   },
   objects: {
     obj1: { id: 'obj1', itemId: 'unread-note', ownerActorId: null, nodeId: '1', generatedAtT: 49, expiresAtT: null, unique: false, provisional: false },
@@ -58,6 +58,9 @@ test('builds a Node-scoped AI snapshot without integer clock, other inventory, o
   assert.match(serialized, /面黃肌瘦/);
   assert.match(serialized, /黑眼圈/);
   assert.match(serialized, /狀態不好/);
+  assert.match(serialized, /"remaining_life":20/);
+  assert.doesNotMatch(serialized, /hit_points/);
+  assert.match(built.input.narration, /self\.remaining_life 代表目前餘命/);
 });
 
 test('does not synthesize narration when an eligible settled event lacks a source-backed template', () => {
@@ -94,4 +97,26 @@ test('keeps only the actor life own prior public narration and latest JSON, neve
 test('source narrative templates never translate an unknown event into an invented result', () => {
   const unknown: WorldEvent = { ...events[0]!, kind: 'unmapped-event' };
   assert.equal(formatAiNarrativeEvent(unknown, '1.1'), undefined);
+});
+
+test('provides the previous monster action outcome to an AI on the same Node', () => {
+  const monsterAction: WorldEvent = {
+    eventId: 'monster-action-1', sequence: 4, worldTimeT: 49, actorId: 'm.1', nodeId: '1',
+    kind: 'monster-action-settled', visibility: 'public',
+    payload: { monsterName: '森林野豬', action: 'attack', hits: [{ targetId: '1.1', appliedDamage: 2, hitPointsAfter: 18, killed: false }] },
+    randomDraws: [],
+  };
+  const built = buildAiInput({ ...state, sequence: 4 }, '1.1', legalActions, [monsterAction], formatAiNarrativeEvent);
+  assert.equal(built.ok, true);
+  if (built.ok) assert.match(built.input.narration, /森林野豬發動了攻擊：1\.1受到2點傷害/);
+});
+
+test('shows a public message to the named same-Node recipient on their next action', () => {
+  const message: WorldEvent = {
+    eventId: 'message-to-2.1', sequence: 4, worldTimeT: 49, actorId: '1.1', nodeId: '1',
+    kind: 'public-message-sent', visibility: 'public', payload: { recipientId: '2.1', text: '請一起探索河流' }, randomDraws: [],
+  };
+  const built = buildAiInput({ ...state, sequence: 4 }, '2.1', legalActions, [message], formatAiNarrativeEvent);
+  assert.equal(built.ok, true);
+  if (built.ok) assert.match(built.input.narration, /居民 1\.1向2\.1發送公開訊息：「請一起探索河流」/);
 });

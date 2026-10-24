@@ -1,5 +1,8 @@
 # Dependencies and generated state
 **/node_modules/
+island-sim/data/model-settings.sqlite
+island-sim/data/model-settings.sqlite-wal
+island-sim/data/model-settings.sqlite-shm
 island-sim/.playwright-cli/
 island-sim/data/
 island-sim/qa/

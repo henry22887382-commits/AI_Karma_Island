@@ -35,6 +35,25 @@ test('upgrades legacy resident identity fields without mutating the source snaps
   assert.equal(JSON.stringify(legacy), before);
 });
 
+test('adds the default map ID to legacy snapshots and preserves an existing map ID', () => {
+  const legacy = {
+    schemaVersion: 1,
+    sequence: 0,
+    contentVersion: 'legacy-content',
+    worldTimeT: 0,
+    seed: 'legacy-seed',
+    rngState: '00000001',
+    actors: {},
+    nodes: {},
+    objects: {},
+  } as unknown as WorldState;
+  const upgraded = migrateWorldSnapshot(legacy);
+  assert.equal(upgraded.mapId, 'default-map');
+
+  const existing = { ...legacy, schemaVersion: 2 as const, mapId: 'custom-map' } as WorldState;
+  assert.equal(migrateWorldSnapshot(existing).mapId, 'custom-map');
+});
+
 test('SQLite v1 snapshot stays byte-for-byte unchanged on read and upgrades on its next commit', () => {
   const legacy = {
     schemaVersion: 1,

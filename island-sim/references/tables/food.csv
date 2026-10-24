@@ -1,4 +1,4 @@
-name,fullness_change,hp_change,sleep_change,spoil_days,note
+﻿name,fullness_change,hp_change,sleep_change,spoil_days,note
 普通魚,3,0,0,3,一般食物
 名鮭魚,4,0,0,3,河流潛水
 藍鰭/黑鮪魚,6,0,0,3,釣魚
@@ -11,3 +11,5 @@ name,fullness_change,hp_change,sleep_change,spoil_days,note
 催眠溫泉水,-2,-3,0,N/A,自願飲用
 灼熱泉水,3,-2,0,N/A,自願飲用
 龍血,0,10,0,N/A,回血而非食物;唯一可回血效果
+魚,3,0,0,3,容器物品定義；一般食品
+肉,3,0,0,3,容器物品定義；一般食品

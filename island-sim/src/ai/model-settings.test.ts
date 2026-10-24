@@ -8,13 +8,15 @@ test('each non-secret slot revision has a stable opaque credential reference', (
   try {
     const initial = store.readSlots()[0];
     assert.ok(initial?.credentialRef);
+    assert.equal(initial?.maxContextCharacters, 8000);
     const input = {
       slotId: 1, provider: 'local', baseUrl: 'http://127.0.0.1:9999/v1', model: 'm1', fallbackModels: [],
-      inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxInputTokens: 1000, maxOutputTokens: 100,
+      inputUsdPerMillion: 1, outputUsdPerMillion: 2, maxInputTokens: 1000, maxContextCharacters: 12000, maxOutputTokens: 100,
       modelSizeB: null, sizeAtLeast8BConfirmed: true, styleDescription: '簡潔、謹慎',
     };
     store.saveSlot(input, '2026-10-20T00:00:00.000Z');
     const firstRevision = store.readSlots()[0];
+    assert.equal(firstRevision?.maxContextCharacters, 12000);
     assert.ok(firstRevision?.credentialRef);
     assert.notEqual(firstRevision.credentialRef, initial.credentialRef);
     store.saveSlot(input, '2026-10-20T00:00:00.000Z');
@@ -52,7 +54,7 @@ test('primary model identity cannot be assigned to two resident slots', () => {
   }
 });
 
-test('8B readiness requires an explicit user attestation, does not infer unknown metadata, and rejects a known sub-8B value', () => {
+test('model readiness does not depend on model-size metadata or an 8B attestation', () => {
   const settings = new ModelSettingsStore(new DatabaseSync(':memory:'));
   try {
     const config = settings.saveSlot({
@@ -60,7 +62,7 @@ test('8B readiness requires an explicit user attestation, does not infer unknown
       inputUsdPerMillion: 1, outputUsdPerMillion: 1, maxInputTokens: 1000, maxOutputTokens: 128,
       modelSizeB: null, sizeAtLeast8BConfirmed: false, styleDescription: null,
     });
-    assert.equal(isModelSlotReady(config, true), false);
+    assert.equal(isModelSlotReady(config, true), true);
     const attested = settings.saveSlot({
       slotId: 1, provider: 'local', baseUrl: 'http://127.0.0.1:1234/v1', model: 'size-check', fallbackModels: [],
       inputUsdPerMillion: 1, outputUsdPerMillion: 1, maxInputTokens: 1000, maxOutputTokens: 128,
@@ -72,7 +74,7 @@ test('8B readiness requires an explicit user attestation, does not infer unknown
       inputUsdPerMillion: 1, outputUsdPerMillion: 1, maxInputTokens: 1000, maxOutputTokens: 128,
       modelSizeB: 7, sizeAtLeast8BConfirmed: true, styleDescription: '謹慎探索',
     });
-    assert.equal(isModelSlotReady(belowTarget, true), false);
+    assert.equal(isModelSlotReady(belowTarget, true), true);
   } finally {
     settings.close();
   }

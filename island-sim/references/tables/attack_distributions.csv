@@ -1,4 +1,4 @@
-monster,attack_type,raw_damage,probability_percent,status
+﻿monster,attack_type,raw_damage,probability_percent,status
 沙灘螃蟹,normal,0,60,confirmed_or_summary
 沙灘螃蟹,normal,1,40,confirmed_or_summary
 夜間蝙蝠,normal,0,40,confirmed_or_summary

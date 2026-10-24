@@ -50,7 +50,7 @@
 
 ## 本次回補與資料文件
 
-**增量修訂：** `tables/monsters.csv` 包含生成區域、觸發、時間、機率及證據欄。**森林野豬按山羊同級數值設計**（標記為衍生實作），**夜蝙蝠及夜狼的生成區域為所有沒有點燃營火保護的Node**；其他動物沿各自已知來源，不擅造生成機率。只原位更新相關表格和章節。
+**增量修訂：** `tables/monsters.csv` 包含生成區域、觸發、時間、機率及證據欄。**森林野豬按山羊同級數值設計**（標記為衍生實作），**夜蝙蝠及夜狼適用所有沒有有效點燃營火保護的Node**；其地形夜間遇敵率、判定順序、睡眠檢查及成功後敵種權重依06現行規則。只原位更新相關表格和章節。
 
 使用者貼回 9怪、7容器的分類與具體掉落表。新的CSV為 `monster_bonus_drops.csv`、`container_category_weights.csv`、`container_item_subpools.csv`、`container_effective_item_rates.csv`、`recovered_surface_actions.csv`。
 

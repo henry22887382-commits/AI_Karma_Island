@@ -30,7 +30,9 @@ export function drawDungeonEvent(input: {
   if (input.eligibleEmptyNonBossNode === false) {
     return { event: null, randomDraws: [], rngStateAfter, unresolved: null };
   }
-  const rows = input.events.filter((row) => row.floor === input.floor);
+  const nodeScope = input.floor !== '火山洞窟' ? 'all' :
+    volcanicBombNodes.includes(input.nodeId as (typeof volcanicBombNodes)[number]) ? 'first_row' : 'non_first_row';
+  const rows = input.events.filter((row) => row.floor === input.floor && (row.node_scope === 'all' || row.node_scope === nodeScope));
   if (rows.length === 0) {
     return {
       event: null,
@@ -39,20 +41,8 @@ export function drawDungeonEvent(input: {
       unresolved: { sourceId: 'dungeon-events', detail: `No event rows are available for floor ${input.floor}.` },
     };
   }
-  const volcanicBomb = rows.find((row) => row.event === '火山彈');
-  if (volcanicBomb !== undefined && !volcanicBombNodes.includes(input.nodeId as (typeof volcanicBombNodes)[number])) {
-    return {
-      event: null,
-      randomDraws: [],
-      rngStateAfter,
-      unresolved: {
-        sourceId: 'D-007',
-        detail: 'The source restricts volcanic bombs to A1/B1/C1 but does not specify how the removed 8% is allocated elsewhere on floor three.',
-      },
-    };
-  }
-  const entries = rows.map((row) => ({ row, weight: requiredNumber(row.probability_percent, 'probability_percent') }));
-  assertPercentTotal(entries.map((entry) => entry.weight), `Dungeon event pool ${input.floor}`);
+  const entries = rows.map((row) => ({ row, weight: requiredInteger(row.weight_units, 'weight_units') }));
+  assertWeightTotal(entries.map((entry) => entry.weight), `Dungeon event pool ${input.floor}/${nodeScope}`);
   const draw = input.random.next(`dungeon.event.${input.floor}.${input.nodeId}`);
   const event = selectWeighted(entries, draw.value).row;
   return { event, randomDraws: [draw], rngStateAfter: input.random.stateHex, unresolved: null };
@@ -93,13 +83,13 @@ export function drawMonsterBonusDrop(input: {
 export interface ContainerDrawResult {
   readonly item: string;
   readonly category: string;
-  readonly provisional: true;
-  readonly status: 'recovered_user_source_provisional_one_item';
+  readonly provisional: false;
+  readonly status: 'user_confirmed_one_item_per_item_container';
   readonly randomDraws: readonly RandomDraw[];
   readonly rngStateAfter: string;
 }
 
-/** Apply the recovered two-stage candidate pool while keeping its one-item assumption explicitly provisional. */
+/** Apply the recovered two-stage candidate pool; each item-bearing container yields exactly one item. */
 export function drawContainerItem(input: {
   readonly source: string;
   readonly categoryWeights: readonly CsvRow[];
@@ -124,8 +114,8 @@ export function drawContainerItem(input: {
   return {
     item: selectWeighted(items, itemDraw.value).item,
     category,
-    provisional: true,
-    status: 'recovered_user_source_provisional_one_item',
+    provisional: false,
+    status: 'user_confirmed_one_item_per_item_container',
     randomDraws: [categoryDraw, itemDraw],
     rngStateAfter: input.random.stateHex,
   };
@@ -169,9 +159,10 @@ export function createDropObject(input: {
 }
 
 function selectWeighted<T extends { readonly weight: number }>(entries: readonly T[], value: number): T {
+  const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
   let boundary = 0;
   for (const entry of entries) {
-    boundary += entry.weight / 100;
+    boundary += entry.weight / totalWeight;
     if (value < boundary) return entry;
   }
   return entries.at(-1)!;
@@ -182,6 +173,19 @@ function assertPercentTotal(weights: readonly number[], label: string): void {
     Math.abs(weights.reduce((sum, weight) => sum + weight, 0) - 100) > 1e-8) {
     throw new Error(`${label} must contain a complete, non-negative 100% distribution.`);
   }
+}
+
+function assertWeightTotal(weights: readonly number[], label: string): void {
+  if (weights.length === 0 || weights.some((weight) => !Number.isInteger(weight) || weight < 0) ||
+    weights.reduce((sum, weight) => sum + weight, 0) !== 300) {
+    throw new Error(`${label} must contain exactly 300 non-negative integer weight units.`);
+  }
+}
+
+function requiredInteger(value: string | undefined, column: string): number {
+  const parsed = requiredNumber(value, column);
+  if (!Number.isInteger(parsed)) throw new Error(`Source column ${column} must be an integer.`);
+  return parsed;
 }
 
 function requiredNumber(value: string | undefined, column: string): number {

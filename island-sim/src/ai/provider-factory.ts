@@ -1,10 +1,27 @@
 import type { WorldActor } from '../domain/model.ts';
 import type { SQLiteWorldStore } from '../persistence/sqlite-store.ts';
-import { BudgetedModelProvider } from './budgeted-provider.ts';
-import { currentPriceForBinding } from './model-binding.ts';
+import { BudgetedModelProvider, UnpricedModelProvider } from './budgeted-provider.ts';
+import { currentPriceForBinding, type ModelPrice } from './model-binding.ts';
 import { HttpChatCompletionsProvider } from './http-provider.ts';
+import { providerAccountingAdapter } from './provider-accounting.ts';
 import type { CostLedger, ModelProvider, ProviderPricing } from './router.ts';
 import type { ModelSettingsStore, ProcessModelSecrets } from './model-settings.ts';
+import type { ModelSlotConfig } from './model-settings.ts';
+
+export function createSummarizerProvider(input: { readonly config: ModelSlotConfig; readonly secrets: ProcessModelSecrets; readonly store: SQLiteWorldStore; readonly fetcher?: typeof fetch }): ModelProvider | null {
+  const { config } = input;
+  const apiKey = input.secrets.getForCredential(config.credentialRef);
+  if (!config.provider || !config.baseUrl || !config.model || !apiKey) return null;
+  const accounting = providerAccountingAdapter(config.baseUrl);
+  const inner = new HttpChatCompletionsProvider({ id: `${config.provider}/${config.model}`, baseUrl: config.baseUrl, model: config.model, apiKey, includeActualCost: accounting.kind === 'openrouter' }, input.fetcher);
+  const ledger: CostLedger = {
+    reserveCost: async (request) => input.store.reserveCost(request),
+    settleCost: async (request) => input.store.settleCost(request),
+    recordUnpricedCost: async (request) => input.store.recordUnpricedCost(request),
+    recordActualCost: async (request) => input.store.recordActualCost(request),
+  };
+  return new UnpricedModelProvider({ inner, ledger, acceptProviderActualCost: accounting.kind === 'openrouter' });
+}
 
 export type BoundProvidersResult =
   | { readonly ok: true; readonly primary: ModelProvider; readonly fallback?: ModelProvider }
@@ -27,50 +44,60 @@ export function createBoundProviders(input: {
   const slots = input.settings.readSlots();
   const primaryPrice = currentPriceForBinding(binding, slots);
   if (!primaryPrice.ok) return { ok: false, unresolved: primaryPrice.unresolved };
-  if (binding.maxInputTokens === null || binding.maxOutputTokens === null) {
-    return { ok: false, unresolved: `居民 ${input.actor.id} 的此生 token 上限未設定。` };
+  if (binding.maxInputTokens === null) {
+    return { ok: false, unresolved: `居民 ${input.actor.id} 的此生輸入 token 上限未設定。` };
   }
 
   const ledger: CostLedger = {
     reserveCost: async (request) => input.store.reserveCost(request),
     settleCost: async (request) => input.store.settleCost(request),
+    recordUnpricedCost: async (request) => input.store.recordUnpricedCost(request),
+    recordActualCost: async (request) => input.store.recordActualCost(request),
   };
-  const pricing: ProviderPricing = {
-    inputUsdPerMillionTokens: primaryPrice.price.inputUsdPerMillion,
-    outputUsdPerMillionTokens: primaryPrice.price.outputUsdPerMillion,
-    maxInputTokens: binding.maxInputTokens,
-    maxOutputTokens: binding.maxOutputTokens,
-    priceVersion: primaryPrice.price.priceVersion,
-  };
-  const primary = new BudgetedModelProvider({
-    inner: new HttpChatCompletionsProvider({
-      id: `${binding.provider}/${binding.model}`, baseUrl: binding.baseUrl, model: binding.model, apiKey,
-      maxOutputTokens: binding.maxOutputTokens,
-    }, input.fetcher),
-    pricing, ledger, ...(input.clock ? { clock: input.clock } : {}),
-  });
+  const adapter = providerAccountingAdapter(binding.baseUrl);
+  const primaryHttp = new HttpChatCompletionsProvider({
+    id: `${binding.provider}/${binding.model}`, baseUrl: binding.baseUrl, model: binding.model, apiKey,
+    includeActualCost: adapter.kind === 'openrouter',
+  }, input.fetcher);
+  const primary = adapter.kind === 'openrouter' && primaryPrice.price !== null
+    ? new BudgetedModelProvider({
+      inner: primaryHttp,
+      pricing: toProviderPricing(primaryPrice.price, binding.maxInputTokens),
+      ledger, ...(input.clock ? { clock: input.clock } : {}),
+    })
+    : new UnpricedModelProvider({
+      inner: primaryHttp, ledger, acceptProviderActualCost: adapter.kind === 'openrouter', ...(input.clock ? { clock: input.clock } : {}),
+    });
 
   const fallbacks: ModelProvider[] = [];
   for (const fallbackModel of binding.fallbackModels) {
     const fallbackBinding = { ...binding, model: fallbackModel };
     const fallbackPrice = currentPriceForBinding(fallbackBinding, slots);
-    if (!fallbackPrice.ok) return { ok: false, unresolved: `備援模型 ${fallbackModel} 無法安全計價：${fallbackPrice.unresolved}` };
-    fallbacks.push(new BudgetedModelProvider({
-      inner: new HttpChatCompletionsProvider({
-        id: `${binding.provider}/${fallbackModel}`, baseUrl: binding.baseUrl, model: fallbackModel, apiKey,
-        maxOutputTokens: binding.maxOutputTokens,
-      }, input.fetcher),
-      pricing: {
-        inputUsdPerMillionTokens: fallbackPrice.price.inputUsdPerMillion,
-        outputUsdPerMillionTokens: fallbackPrice.price.outputUsdPerMillion,
-        maxInputTokens: binding.maxInputTokens,
-        maxOutputTokens: binding.maxOutputTokens,
-        priceVersion: fallbackPrice.price.priceVersion,
-      }, ledger, ...(input.clock ? { clock: input.clock } : {}),
-    }));
+    if (!fallbackPrice.ok) return { ok: false, unresolved: `備援模型 ${fallbackModel} 設定無效：${fallbackPrice.unresolved}` };
+    const fallbackHttp = new HttpChatCompletionsProvider({
+      id: `${binding.provider}/${fallbackModel}`, baseUrl: binding.baseUrl, model: fallbackModel, apiKey,
+      includeActualCost: adapter.kind === 'openrouter',
+    }, input.fetcher);
+    fallbacks.push(adapter.kind === 'openrouter' && fallbackPrice.price !== null
+      ? new BudgetedModelProvider({
+        inner: fallbackHttp,
+        pricing: toProviderPricing(fallbackPrice.price, binding.maxInputTokens),
+        ledger, ...(input.clock ? { clock: input.clock } : {}),
+      })
+      : new UnpricedModelProvider({
+        inner: fallbackHttp, ledger, acceptProviderActualCost: adapter.kind === 'openrouter', ...(input.clock ? { clock: input.clock } : {}),
+      }));
   }
   const fallback = fallbacks.length > 0 ? new FallbackChainProvider(fallbacks) : undefined;
   return { ok: true, primary, ...(fallback ? { fallback } : {}) };
+}
+
+function toProviderPricing(price: ModelPrice, maxInputTokens: number): ProviderPricing {
+  return {
+    inputUsdPerMillionTokens: price.inputUsdPerMillion,
+    outputUsdPerMillionTokens: price.outputUsdPerMillion,
+    maxInputTokens, priceVersion: price.priceVersion,
+  };
 }
 
 class FallbackChainProvider implements ModelProvider {
@@ -84,11 +111,11 @@ class FallbackChainProvider implements ModelProvider {
     this.ready = providers.some(({ ready }) => ready);
   }
 
-  async complete(input: string, maxOutputTokens: number) {
+  async complete(input: string, maxOutputTokens: number, context?: Parameters<ModelProvider['complete']>[2]) {
     for (const provider of this.providers) {
       if (!provider.ready) continue;
       try {
-        return await provider.complete(input, maxOutputTokens);
+        return await provider.complete(input, maxOutputTokens, context);
       } catch (error) {
         if (error instanceof Error && error.name === 'ProviderBudgetBlockedError') throw error;
       }

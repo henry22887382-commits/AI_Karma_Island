@@ -40,7 +40,7 @@ export function applyFood(vitals: Vitals, food: FoodEffect): FoodResult {
     vitals: {
       ...vitals,
       hunger: vitals.hunger + food.hungerChange,
-      hitPoints: vitals.hitPoints + food.hitPointChange,
+      hitPoints: Math.max(0, vitals.hitPoints + food.hitPointChange),
       sleep: vitals.sleep + food.sleepChange,
     },
     unresolved: [],

@@ -25,6 +25,20 @@ test('accepts one JSON reply only when its ID is in the current action snapshot'
   });
 });
 
+test('marks text-bearing legal actions for message cost accounting on the proposal call', async () => {
+  let messageActionIds: readonly string[] | undefined;
+  const primary = {
+    id: 'primary', ready: true,
+    complete: async (_input: string, _maxOutputTokens: number, context?: { messageActionIds?: readonly string[] }) => {
+      messageActionIds = context?.messageActionIds;
+      return { raw: JSON.stringify({ action_id: 'say-2', intent: '回覆', text: '測試訊息' }) };
+    },
+  };
+  const result = await executeDecision({ actorId: 'resident', prompt: 'prompt', actions, primary, health: initialRouterHealth });
+  assert.equal(result.kind, 'proposal');
+  assert.deepEqual(messageActionIds, ['say-2']);
+});
+
 test('rejects trailing prose and unknown action IDs without asking a provider to retry', () => {
   assert.equal(validateModelReply('{"action_id":"look-1","intent":"觀察"}\n完成', actions).ok, false);
   assert.equal(validateModelReply('{"action_id":"invented","intent":"觀察"}', actions).ok, false);
@@ -79,19 +93,23 @@ test('blocks calls when current pricing is absent and respects the hard monthly 
 test('retries transport errors at most twice, then uses the supplied fallback adapter', async () => {
   let primaryCalls = 0;
   let fallbackCalls = 0;
+  const primaryRetryFlags: boolean[] = [];
+  let fallbackRetryFlag: boolean | undefined;
   const primary = {
     id: 'primary',
     ready: true,
-    complete: async () => { primaryCalls += 1; throw new Error('offline'); },
+    complete: async (_input: string, _maxOutputTokens: number, context?: { retry: boolean }) => { primaryCalls += 1; primaryRetryFlags.push(context?.retry ?? false); throw new Error('offline'); },
   };
   const fallback = {
     id: 'fallback',
     ready: true,
-    complete: async () => { fallbackCalls += 1; return { raw: '{"action_id":"look-1","intent":"觀察"}' }; },
+    complete: async (_input: string, _maxOutputTokens: number, context?: { retry: boolean }) => { fallbackCalls += 1; fallbackRetryFlag = context?.retry; return { raw: '{"action_id":"look-1","intent":"觀察"}' }; },
   };
   const result = await executeDecision({ actorId: '1.1', prompt: 'prompt', actions, primary, fallback, health: initialRouterHealth });
   assert.equal(primaryCalls, 3);
   assert.equal(fallbackCalls, 1);
+  assert.deepEqual(primaryRetryFlags, [false, true, true]);
+  assert.equal(fallbackRetryFlag, false);
   assert.equal(result.kind, 'proposal');
   if (result.kind === 'proposal') {
     assert.equal(result.providerId, 'fallback');

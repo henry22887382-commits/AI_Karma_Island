@@ -11,8 +11,10 @@ test('surface capability proposal enumerates all Nodes but is never runtime-enab
   assert.deepEqual(proposal.sourceBackedNodeAssignments, []);
   assert.equal(proposal.status, 'review-only-not-approved');
   assert.equal(proposal.nodes.every((node) => node.runtimeEnabled === false), true);
-  assert.deepEqual(proposal.nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'forest-berry-gather')).map((node) => node.nodeId), ['9', '17', '23']);
+  assert.deepEqual(proposal.nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'forest-berry-gather')).map((node) => node.nodeId), ['9', '11', '17', '23']);
+  assert.equal(proposal.nodes.find((node) => node.nodeId === '11')?.candidates.find((candidate) => candidate.action === 'forest-berry-gather')?.evidence, 'user-confirmed-forest-terrain-candidate');
   assert.deepEqual(proposal.nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'rock-exploration')).map((node) => node.nodeId), ['6', '19', '22']);
+  assert.equal(proposal.nodes.find((node) => node.nodeId === '19')?.candidates.find((candidate) => candidate.action === 'rock-exploration')?.evidence, 'user-selected-rock-terrain-candidate');
   assert.deepEqual(proposal.nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'river-exploration')).map((node) => node.nodeId), ['24']);
   assert.deepEqual(proposal.proposedActionNodeIds.fishing, ['2', '10', '14']);
   for (const [action, ids] of Object.entries(proposal.proposedActionNodeIds)) {

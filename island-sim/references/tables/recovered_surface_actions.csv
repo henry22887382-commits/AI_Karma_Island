@@ -1,6 +1,6 @@
-action,result_or_hazard,probability_percent,effect,role,status,compatibility
-森林採野莓,有益野果,80,取得有益野果,result,recovered_source_no_known_conflict,可作森林採集的獨立主池
-森林採野莓,無收穫,20,無,result,recovered_source_no_known_conflict,同上
+﻿action,result_or_hazard,probability_percent,effect,role,status,compatibility
+森林採野莓,有益野果,80,取得有益野果,result,user_confirmed_active_2026-10-22,使用者完整地表規則表確認的主動採莓池
+森林採野莓,無收穫,20,無,result,user_confirmed_active_2026-10-22,使用者完整地表規則表確認的主動採莓池
 岩縫探索（早期摘錄）,魔法石,15,取得魔法石,result,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險
 岩縫探索（早期摘錄）,寶箱,15,取得寶箱,result,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險
 岩縫探索（早期摘錄）,無收穫,70,無,result,historical_superseded_not_active,資源機率5/5/90已由使用者重新確認；此舊摘錄不得載入正式抽選。舊−1HP亦不併入現行日夜風險

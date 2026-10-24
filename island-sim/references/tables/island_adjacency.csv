@@ -1,4 +1,4 @@
-node_id,neighbors,degree
+﻿node_id,neighbors,degree
 1,2 16 17,3
 2,1 3 17,3
 3,2 4 18,3

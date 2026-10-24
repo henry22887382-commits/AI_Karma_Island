@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type { JsonValue, WorldEvent, WorldState } from '../domain/model.ts';
-import { INITIAL_SCHEMA_SQL, SCHEMA_VERSION } from './schema.ts';
+import { INITIAL_SCHEMA_SQL, LIFECYCLE_SCHEMA_SQL, SCHEMA_VERSION } from './schema.ts';
 import { migrateWorldSnapshot } from './snapshot-migration.ts';
 
 export interface MonthlyCostStatus {
@@ -9,7 +9,9 @@ export interface MonthlyCostStatus {
   readonly settledUsd: number;
   readonly reservedUsd: number;
   readonly committedUsd: number;
-  readonly remainingUsd: number;
+  readonly remainingUsd: number | null;
+  readonly accountingComplete: boolean;
+  readonly unknownProviderIds: readonly string[];
 }
 
 export interface CostReservationRequest {
@@ -21,7 +23,7 @@ export interface CostReservationRequest {
 export interface CostReservationResult {
   readonly allowed: boolean;
   readonly reservationId: string | null;
-  readonly remainingUsd: number;
+  readonly remainingUsd: number | null;
 }
 
 export interface CostSettlementRequest {
@@ -32,7 +34,58 @@ export interface CostSettlementRequest {
 
 export interface CostSettlementResult {
   readonly exceededCap: boolean;
-  readonly remainingUsd: number;
+  readonly remainingUsd: number | null;
+}
+
+export type WorldSessionStatus = 'setup' | 'in-progress' | 'ended';
+export interface WorldSessionSummary {
+  readonly sessionId: string;
+  readonly loadedSaveId: string | null;
+  readonly loadInstanceId: string | null;
+  readonly name: string;
+  readonly status: WorldSessionStatus;
+  readonly residentCount: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+export interface WorldSessionSaveSummary {
+  readonly saveId: string;
+  readonly sessionId: string;
+  readonly sessionName: string;
+  readonly name: string;
+  readonly savedAt: string;
+  readonly sequence: number;
+}
+
+export interface LatestAiFormatError {
+  readonly recordedAt: string;
+  readonly actorId: string;
+  readonly reason: string;
+  readonly rawOutput: string;
+}
+
+/** Map content is stored per profile so edits to one map cannot overwrite another. */
+export interface MapProfileContent {
+  readonly nodes: readonly JsonValue[];
+  readonly edges: readonly JsonValue[];
+  readonly nodeNotices: readonly JsonValue[];
+}
+
+export interface MapProfile extends MapProfileContent {
+  readonly mapId: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+interface MapProfileRow {
+  readonly map_id: string;
+  readonly name: string;
+  readonly nodes_json: string;
+  readonly edges_json: string;
+  readonly node_notices_json: string;
+  readonly created_at: string;
+  readonly updated_at: string;
 }
 
 export class SQLiteWorldStore {
@@ -71,6 +124,196 @@ export class SQLiteWorldStore {
       payload: JSON.parse(row.payload_json) as JsonValue,
       randomDraws: JSON.parse(row.random_draws_json) as WorldEvent['randomDraws'],
     }));
+  }
+
+  recordLatestAiFormatError(error: LatestAiFormatError): void {
+    this.#db.prepare(`INSERT INTO latest_ai_format_error(singleton_id, recorded_at, actor_id, reason, raw_output)
+      VALUES (1, ?, ?, ?, ?) ON CONFLICT(singleton_id) DO UPDATE SET
+      recorded_at=excluded.recorded_at, actor_id=excluded.actor_id, reason=excluded.reason, raw_output=excluded.raw_output
+      WHERE excluded.recorded_at >= latest_ai_format_error.recorded_at`)
+      .run(error.recordedAt, error.actorId, error.reason, error.rawOutput);
+  }
+
+  readLatestAiFormatError(): LatestAiFormatError | null {
+    const row = this.#db.prepare('SELECT recorded_at, actor_id, reason, raw_output FROM latest_ai_format_error WHERE singleton_id=1')
+      .get() as { recorded_at: string; actor_id: string; reason: string; raw_output: string } | undefined;
+    return row ? { recordedAt: row.recorded_at, actorId: row.actor_id, reason: row.reason, rawOutput: row.raw_output } : null;
+  }
+
+  /** Seed the stable default profile from the currently loaded CSV data on first use. */
+  ensureDefaultMapProfile(content: MapProfileContent, name = '初始地圖'): MapProfile {
+    validateMapProfileContent(content);
+    this.#transaction(() => {
+      const existing = this.#db.prepare('SELECT 1 AS found FROM map_profiles WHERE map_id=?').get('default-map');
+      if (existing) return;
+      const now = new Date().toISOString();
+      this.#db.prepare(`INSERT INTO map_profiles(map_id, name, nodes_json, edges_json, node_notices_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+        'default-map', validateMapProfileName(name), stringifyJson(content.nodes), stringifyJson(content.edges), stringifyJson(content.nodeNotices), now, now,
+      );
+    });
+    return this.readMapProfile('default-map')!;
+  }
+
+  listMapProfiles(): readonly MapProfile[] {
+    const rows = this.#db.prepare('SELECT map_id, name, nodes_json, edges_json, node_notices_json, created_at, updated_at FROM map_profiles ORDER BY created_at, map_id').all() as unknown as readonly MapProfileRow[];
+    return rows.map(toMapProfile);
+  }
+
+  readMapProfile(mapId: string): MapProfile | null {
+    const row = this.#db.prepare('SELECT map_id, name, nodes_json, edges_json, node_notices_json, created_at, updated_at FROM map_profiles WHERE map_id=?').get(mapId) as MapProfileRow | undefined;
+    return row ? toMapProfile(row) : null;
+  }
+
+  createMapProfile(name: string, content: MapProfileContent): MapProfile {
+    validateMapProfileContent(content);
+    const mapId = randomUUID();
+    const now = new Date().toISOString();
+    this.#db.prepare(`INSERT INTO map_profiles(map_id, name, nodes_json, edges_json, node_notices_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+      mapId, validateMapProfileName(name), stringifyJson(content.nodes), stringifyJson(content.edges), stringifyJson(content.nodeNotices), now, now,
+    );
+    return this.readMapProfile(mapId)!;
+  }
+
+  updateMapProfile(mapId: string, name: string, content: MapProfileContent): MapProfile {
+    validateMapProfileContent(content);
+    const result = this.#db.prepare(`UPDATE map_profiles SET name=?, nodes_json=?, edges_json=?, node_notices_json=?, updated_at=? WHERE map_id=?`)
+      .run(validateMapProfileName(name), stringifyJson(content.nodes), stringifyJson(content.edges), stringifyJson(content.nodeNotices), new Date().toISOString(), mapId);
+    if (Number(result.changes) !== 1) throw new Error('找不到指定地圖存檔。');
+    return this.readMapProfile(mapId)!;
+  }
+
+  deleteMapProfile(mapId: string): void {
+    if (mapId === 'default-map') throw new Error('預設地圖存檔不可刪除。');
+    const result = this.#db.prepare('DELETE FROM map_profiles WHERE map_id=?').run(mapId);
+    if (Number(result.changes) !== 1) throw new Error('找不到指定地圖存檔。');
+  }
+
+  ensureWorldSession(residentCount: number): WorldSessionSummary {
+    const current = this.readCurrentWorldSession();
+    if (current) return current;
+    const snapshot = this.readSnapshot();
+    if (!snapshot) throw new Error('無法建立局別記錄：世界快照不存在。');
+    const status: WorldSessionStatus = snapshot.sequence > 0 ? 'in-progress' : 'setup';
+    const now = new Date().toISOString();
+    const session = { sessionId: randomUUID(), loadedSaveId: null, loadInstanceId: randomUUID(), name: '目前遊戲', status, residentCount: snapshot.residentCount ?? residentCount, createdAt: now, updatedAt: now };
+    this.#transaction(() => {
+      this.#db.prepare('INSERT INTO world_sessions(session_id, name, status, resident_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(session.sessionId, session.name, session.status, session.residentCount, now, now);
+      this.#db.prepare('INSERT INTO active_world_session(singleton_id, session_id, load_instance_id) VALUES (1, ?, ?)').run(session.sessionId, session.loadInstanceId);
+    });
+    return session;
+  }
+
+  readCurrentWorldSession(): WorldSessionSummary | null {
+    const row = this.#db.prepare(`SELECT s.session_id, a.source_save_id, a.load_instance_id, s.name, s.status, s.resident_count, s.created_at, s.updated_at
+      FROM active_world_session a JOIN world_sessions s ON s.session_id=a.session_id WHERE a.singleton_id=1`).get() as SessionRow | undefined;
+    return row ? toSessionSummary(row) : null;
+  }
+
+  setSetupResidentCount(residentCount: number): void {
+    if (!Number.isInteger(residentCount) || residentCount < 1 || residentCount > 10) throw new RangeError('居民人數必須介於 1–10 人。');
+    this.#transaction(() => {
+      const active = this.#db.prepare(`SELECT s.session_id, s.status FROM active_world_session a JOIN world_sessions s ON s.session_id=a.session_id WHERE a.singleton_id=1`).get() as { session_id: string; status: WorldSessionStatus } | undefined;
+      if (!active || active.status !== 'setup') throw new Error('目前遊戲已開始；居民人數只能在新局開始前設定。');
+      this.#db.prepare('UPDATE world_sessions SET resident_count=?, updated_at=? WHERE session_id=?').run(residentCount, new Date().toISOString(), active.session_id);
+    });
+  }
+
+  readSetupModelAssignments(residentCount?: number): Readonly<Record<number, number>> {
+    const session = this.readCurrentWorldSession();
+    if (!session) return {};
+    const assignmentCount = residentCount ?? session.residentCount;
+    if (!Number.isInteger(assignmentCount) || assignmentCount < 1 || assignmentCount > 10) throw new RangeError('居民人數必須介於 1–10 人。');
+    const rows = this.#db.prepare('SELECT resident_index, template_slot FROM setup_model_assignments WHERE session_id=?').all(session.sessionId) as unknown as readonly { resident_index: number; template_slot: number }[];
+    return Object.fromEntries(Array.from({ length: assignmentCount }, (_, index) => {
+      const residentIndex = index + 1;
+      return [residentIndex, rows.find((row) => row.resident_index === residentIndex)?.template_slot ?? residentIndex];
+    }));
+  }
+
+  setSetupModelAssignment(residentIndex: number, templateSlot: number, residentCount?: number): void {
+    if (!Number.isInteger(residentIndex) || residentIndex < 1 || residentIndex > 10 || !Number.isInteger(templateSlot) || templateSlot < 1 || templateSlot > 10) {
+      throw new RangeError('居民與模型卡槽位必須介於 1–10。');
+    }
+    const assignmentCount = residentCount;
+    if (assignmentCount !== undefined && (!Number.isInteger(assignmentCount) || assignmentCount < 1 || assignmentCount > 10)) throw new RangeError('居民人數必須介於 1–10 人。');
+    this.#transaction(() => {
+      const active = this.#db.prepare(`SELECT s.session_id, s.status, s.resident_count FROM active_world_session a JOIN world_sessions s ON s.session_id=a.session_id WHERE a.singleton_id=1`).get() as { session_id: string; status: WorldSessionStatus; resident_count: number } | undefined;
+      if (!active || (active.status !== 'setup' && active.status !== 'ended')) throw new Error('目前遊戲進行中，無法安排下一局的模型卡。');
+      if (residentIndex > (assignmentCount ?? active.resident_count)) throw new Error('指定居民編號超出準備中的新局人數。');
+      this.#db.prepare(`INSERT INTO setup_model_assignments(session_id, resident_index, template_slot) VALUES (?, ?, ?)
+        ON CONFLICT(session_id, resident_index) DO UPDATE SET template_slot=excluded.template_slot`).run(active.session_id, residentIndex, templateSlot);
+    });
+  }
+
+  startNewWorldSession(name: string, residentCount: number, state: WorldState, preparedAssignments?: Readonly<Record<number, number>>): WorldSessionSummary {
+    if (!name.trim() || name.trim().length > 80) throw new Error('存檔名稱須為 1–80 個字元。');
+    if (!Number.isInteger(residentCount) || residentCount < 1 || residentCount > 10) throw new RangeError('居民人數必須介於 1–10 人。');
+    if (state.residentCount !== residentCount || state.sequence !== 0) throw new Error('新局初始快照的人數或序號不符。');
+    const now = new Date().toISOString();
+    const sessionId = randomUUID();
+    const templateAssignments = preparedAssignments ?? this.readSetupModelAssignments(residentCount);
+    this.#transaction(() => {
+      const active = this.#db.prepare(`SELECT s.status FROM active_world_session a JOIN world_sessions s ON s.session_id=a.session_id WHERE a.singleton_id=1`).get() as { status: WorldSessionStatus } | undefined;
+      if (active?.status === 'in-progress') throw new Error('請先結束目前遊戲，再開始新局。');
+      this.#archiveCurrentSession('結束時自動封存', now);
+      this.#db.prepare(`INSERT INTO world_sessions(session_id, name, status, resident_count, created_at, updated_at)
+        VALUES (?, ?, 'in-progress', ?, ?, ?)`).run(sessionId, name.trim(), residentCount, now, now);
+      this.#db.prepare('INSERT INTO active_world_session(singleton_id, session_id, source_save_id, load_instance_id) VALUES (1, ?, NULL, ?) ON CONFLICT(singleton_id) DO UPDATE SET session_id=excluded.session_id, source_save_id=NULL, load_instance_id=excluded.load_instance_id').run(sessionId, randomUUID());
+      const insertAssignment = this.#db.prepare('INSERT INTO setup_model_assignments(session_id, resident_index, template_slot) VALUES (?, ?, ?)');
+      for (let residentIndex = 1; residentIndex <= residentCount; residentIndex += 1) insertAssignment.run(sessionId, residentIndex, templateAssignments[residentIndex] ?? residentIndex);
+      this.#db.prepare('DELETE FROM world_events').run();
+      this.#writeSnapshot(state);
+    });
+    return this.readCurrentWorldSession()!;
+  }
+
+  markCurrentWorldSessionStarted(): void {
+    this.#setActiveSessionStatus('in-progress');
+  }
+
+  endCurrentWorldSession(): void {
+    const now = new Date().toISOString();
+    this.#transaction(() => {
+      this.#archiveCurrentSession('結束時自動封存', now);
+      this.#db.prepare(`UPDATE world_sessions SET status='ended', updated_at=? WHERE session_id=(SELECT session_id FROM active_world_session WHERE singleton_id=1)`).run(now);
+    });
+  }
+
+  saveCurrentWorldSession(name: string): WorldSessionSaveSummary {
+    if (!name.trim() || name.trim().length > 80) throw new Error('存檔名稱須為 1–80 個字元。');
+    const row = this.#transaction(() => this.#saveCurrentSession(name.trim(), new Date().toISOString()));
+    return row;
+  }
+
+  listWorldSessionSaves(): readonly WorldSessionSaveSummary[] {
+    const rows = this.#db.prepare(`SELECT v.save_id, v.session_id, s.name AS session_name, v.name, v.saved_at, json_extract(v.snapshot_json, '$.sequence') AS sequence
+      FROM world_session_saves v JOIN world_sessions s ON s.session_id=v.session_id ORDER BY v.saved_at DESC`).all() as unknown as SaveRow[];
+    return rows.map(toSaveSummary);
+  }
+
+  loadWorldSessionSave(saveId: string): void {
+    this.#transaction(() => {
+      const target = this.#db.prepare(`SELECT v.save_id, v.session_id, v.snapshot_json, v.events_json, s.status, s.resident_count
+        FROM world_session_saves v JOIN world_sessions s ON s.session_id=v.session_id WHERE v.save_id=?`).get(saveId) as LoadSaveRow | undefined;
+      if (!target) throw new Error('找不到指定存檔。');
+      this.#saveCurrentSession('切換前自動保存', new Date().toISOString());
+      const state = migrateWorldSnapshot(JSON.parse(target.snapshot_json) as WorldState);
+      const events = JSON.parse(target.events_json) as WorldEvent[];
+      if (!Array.isArray(events) || events.some((event, index) => event.sequence !== index + 1) || state.sequence !== events.length) {
+        throw new Error('存檔的快照與事件序列不一致，未載入。');
+      }
+      this.#db.prepare('DELETE FROM world_events').run();
+      const insertEvent = this.#db.prepare(`INSERT INTO world_events(sequence, event_id, schema_version, world_time_t, actor_id, node_id, event_kind, visibility, payload_json, random_draws_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const event of events) insertEvent.run(event.sequence, event.eventId, SCHEMA_VERSION, event.worldTimeT, event.actorId, event.nodeId, event.kind, event.visibility, stringifyJson(event.payload), stringifyJson(event.randomDraws));
+      this.#writeSnapshot(state);
+      const now = new Date().toISOString();
+      this.#db.prepare('INSERT INTO active_world_session(singleton_id, session_id, source_save_id, load_instance_id) VALUES (1, ?, ?, ?) ON CONFLICT(singleton_id) DO UPDATE SET session_id=excluded.session_id, source_save_id=excluded.source_save_id, load_instance_id=excluded.load_instance_id').run(target.session_id, target.save_id, randomUUID());
+      this.#db.prepare("UPDATE world_sessions SET status='in-progress', resident_count=?, updated_at=? WHERE session_id=?").run(state.residentCount ?? target.resident_count, now, target.session_id);
+    });
   }
 
   commit(expectedSequence: number, state: WorldState, events: readonly WorldEvent[]): void {
@@ -153,7 +396,71 @@ export class SQLiteWorldStore {
         FROM cost_reservations WHERE period_utc = ?
       `).get(row.period_utc) as { committed: number };
       const committed = Number(total.committed);
-      return { exceededCap: committed > cap + Number.EPSILON, remainingUsd: Math.max(0, cap - committed) };
+      const unknown = this.#db.prepare('SELECT 1 AS found FROM unpriced_provider_calls WHERE period_utc=? LIMIT 1').get(row.period_utc);
+      return { exceededCap: committed > cap + Number.EPSILON, remainingUsd: unknown ? null : Math.max(0, cap - committed) };
+    });
+  }
+
+  recordUnpricedCost(input: {
+    readonly requestId: string;
+    readonly providerId: string;
+    readonly category: string;
+    readonly inputTokens: number | null;
+    readonly outputTokens: number | null;
+    readonly recordedAt: string;
+    readonly reservationId?: string;
+  }): void {
+    const date = new Date(input.recordedAt);
+    if (!Number.isFinite(date.getTime())) throw new Error('Unpriced call timestamp must be a valid ISO date.');
+    for (const [name, value] of [['input tokens', input.inputTokens], ['output tokens', input.outputTokens]] as const) {
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0)) throw new RangeError(`${name} must be a non-negative integer or unknown.`);
+    }
+    if (!input.requestId || !input.providerId) throw new Error('Unpriced call identity is required.');
+    const recordedAt = date.toISOString();
+    const period = recordedAt.slice(0, 7);
+    this.#transaction(() => {
+      if (input.reservationId) {
+        const reservation = this.#db.prepare('SELECT status FROM cost_reservations WHERE reservation_id=?').get(input.reservationId) as { status: string } | undefined;
+        if (!reservation || reservation.status !== 'reserved') throw new Error('Cost reservation is missing or already settled.');
+        this.#db.prepare('DELETE FROM cost_reservations WHERE reservation_id=?').run(input.reservationId);
+      }
+      this.#db.prepare(`INSERT INTO unpriced_provider_calls
+        (request_id, period_utc, recorded_at, provider_id, category, input_tokens, output_tokens)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(input.requestId, period, recordedAt, input.providerId, input.category, input.inputTokens, input.outputTokens);
+    });
+  }
+
+  recordActualCost(input: {
+    readonly requestId: string;
+    readonly providerId: string;
+    readonly category: string;
+    readonly inputTokens: number | null;
+    readonly outputTokens: number | null;
+    readonly costUsd: number;
+    readonly recordedAt: string;
+  }): { readonly exceededCap: boolean } {
+    assertMoney(input.costUsd, 'Actual cost', true);
+    for (const [name, value] of [['input tokens', input.inputTokens], ['output tokens', input.outputTokens]] as const) {
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0)) throw new RangeError(`${name} must be a non-negative integer or unknown.`);
+    }
+    const date = new Date(input.recordedAt);
+    if (!Number.isFinite(date.getTime())) throw new Error('Cost timestamp must be a valid ISO date.');
+    const recordedAt = date.toISOString();
+    const record: JsonValue = {
+      providerId: input.providerId, category: input.category,
+      inputTokens: input.inputTokens, outputTokens: input.outputTokens,
+      costUsd: input.costUsd, recordedAt,
+    } as unknown as JsonValue;
+    return this.#transaction(() => {
+      const reservationId = randomUUID();
+      this.#db.prepare(`INSERT INTO cost_reservations
+        (reservation_id, request_id, period_utc, created_at, reserved_usd, status, actual_usd, record_json)
+        VALUES (?, ?, ?, ?, ?, 'settled', ?, ?)`)
+        .run(reservationId, input.requestId, recordedAt.slice(0, 7), recordedAt, input.costUsd, input.costUsd, stringifyJson(record));
+      const total = this.#db.prepare(`SELECT COALESCE(SUM(CASE WHEN status='reserved' THEN reserved_usd ELSE actual_usd END), 0) AS committed
+        FROM cost_reservations WHERE period_utc=?`).get(recordedAt.slice(0, 7)) as { committed: number };
+      return { exceededCap: Number(total.committed) > 20 + Number.EPSILON };
     });
   }
 
@@ -170,7 +477,10 @@ export class SQLiteWorldStore {
     const settledUsd = Number(row.settled_usd);
     const reservedUsd = Number(row.reserved_usd);
     const committedUsd = settledUsd + reservedUsd;
-    return { periodUtc, settledUsd, reservedUsd, committedUsd, remainingUsd: Math.max(0, 20 - committedUsd) };
+    const unknownRows = this.#db.prepare('SELECT DISTINCT provider_id FROM unpriced_provider_calls WHERE period_utc=? ORDER BY provider_id').all(periodUtc) as unknown as readonly { provider_id: string }[];
+    const unknownProviderIds = unknownRows.map(({ provider_id }) => provider_id);
+    const accountingComplete = unknownProviderIds.length === 0;
+    return { periodUtc, settledUsd, reservedUsd, committedUsd, remainingUsd: accountingComplete ? Math.max(0, 20 - committedUsd) : null, accountingComplete, unknownProviderIds };
   }
 
   close(): void {
@@ -181,6 +491,7 @@ export class SQLiteWorldStore {
     const exists = this.#db.prepare(`SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='schema_migrations'`).get();
     if (exists === undefined) {
       this.#db.exec(INITIAL_SCHEMA_SQL);
+      this.#initializeSchema();
       return;
     }
     const row = this.#db.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as { version: number | null };
@@ -203,9 +514,135 @@ export class SQLiteWorldStore {
         INSERT INTO schema_migrations(version, applied_at) VALUES (2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
         COMMIT;
       `);
+      this.#initializeSchema();
+      return;
+    }
+    if (row.version === 2) {
+      this.#db.exec(LIFECYCLE_SCHEMA_SQL);
+      this.#initializeSchema();
+      return;
+    }
+    if (row.version === 3) {
+      this.#db.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE unpriced_provider_calls (
+          request_id TEXT PRIMARY KEY,
+          period_utc TEXT NOT NULL,
+          recorded_at TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
+          category TEXT NOT NULL,
+          input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+          output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0)
+        ) STRICT;
+        CREATE INDEX unpriced_provider_calls_by_period ON unpriced_provider_calls(period_utc, provider_id);
+        INSERT INTO schema_migrations(version, applied_at) VALUES (4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        COMMIT;
+      `);
+      this.#initializeSchema();
+      return;
+    }
+    if (row.version === 4) {
+      this.#db.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE latest_ai_format_error (
+          singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+          recorded_at TEXT NOT NULL,
+          actor_id TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          raw_output TEXT NOT NULL
+        ) STRICT;
+        INSERT INTO schema_migrations(version, applied_at) VALUES (5, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        COMMIT;
+      `);
+      this.#initializeSchema();
+      return;
+    }
+    if (row.version === 5) {
+      this.#db.exec(`
+        BEGIN IMMEDIATE;
+        ALTER TABLE active_world_session ADD COLUMN source_save_id TEXT REFERENCES world_session_saves(save_id);
+        INSERT INTO schema_migrations(version, applied_at) VALUES (6, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        COMMIT;
+      `);
+      this.#initializeSchema();
+      return;
+    }
+    if (row.version === 6) {
+      this.#db.exec(`
+        BEGIN IMMEDIATE;
+        ALTER TABLE active_world_session ADD COLUMN load_instance_id TEXT;
+        UPDATE active_world_session SET load_instance_id=lower(hex(randomblob(4)))||'-'||lower(hex(randomblob(2)))||'-4'||substr(lower(hex(randomblob(2))),2)||'-'||substr('89ab',abs(random()) % 4 + 1,1)||substr(lower(hex(randomblob(2))),2)||'-'||lower(hex(randomblob(6))) WHERE load_instance_id IS NULL;
+        INSERT INTO schema_migrations(version, applied_at) VALUES (7, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        COMMIT;
+      `);
+      this.#initializeSchema();
+      return;
+    }
+    if (row.version === 7) {
+      this.#db.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE map_profiles (
+          map_id TEXT PRIMARY KEY,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 80),
+          nodes_json TEXT NOT NULL CHECK (json_valid(nodes_json) AND json_type(nodes_json) = 'array'),
+          edges_json TEXT NOT NULL CHECK (json_valid(edges_json) AND json_type(edges_json) = 'array'),
+          node_notices_json TEXT NOT NULL CHECK (json_valid(node_notices_json) AND json_type(node_notices_json) = 'array'),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+        CREATE INDEX map_profiles_by_updated ON map_profiles(updated_at DESC);
+        INSERT INTO schema_migrations(version, applied_at) VALUES (8, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        COMMIT;
+      `);
+      this.#initializeSchema();
       return;
     }
     if (row.version !== SCHEMA_VERSION) throw new Error(`Unsupported database schema version ${String(row.version)}.`);
+    this.#db.prepare("UPDATE active_world_session SET load_instance_id=lower(hex(randomblob(4)))||'-'||lower(hex(randomblob(2)))||'-4'||substr(lower(hex(randomblob(2))),2)||'-'||substr('89ab',abs(random()) % 4 + 1,1)||substr(lower(hex(randomblob(2))),2)||'-'||lower(hex(randomblob(6))) WHERE singleton_id=1 AND load_instance_id IS NULL").run();
+  }
+
+  #setActiveSessionStatus(status: WorldSessionStatus): void {
+    this.#transaction(() => {
+      this.#db.prepare('UPDATE world_sessions SET status=?, updated_at=? WHERE session_id=(SELECT session_id FROM active_world_session WHERE singleton_id=1)')
+        .run(status, new Date().toISOString());
+    });
+  }
+
+  #saveCurrentSession(name: string, savedAt: string): WorldSessionSaveSummary {
+    const session = this.readCurrentWorldSession();
+    const snapshot = this.readSnapshot();
+    if (!session || !snapshot) throw new Error('目前沒有可保存的遊戲。');
+    const events: WorldEvent[] = [];
+    let cursor = 0;
+    for (;;) {
+      const batch = this.readEvents(cursor, 5000);
+      events.push(...batch);
+      const last = batch.at(-1);
+      if (!last || batch.length < 5000) break;
+      cursor = last.sequence;
+    }
+    if (events.length !== snapshot.sequence) throw new Error('目前快照與事件數量不一致，拒絕建立不完整存檔。');
+    const saveId = randomUUID();
+    this.#db.prepare('INSERT INTO world_session_saves(save_id, session_id, name, saved_at, snapshot_json, events_json) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(saveId, session.sessionId, name, savedAt, stringifyJson(snapshot), stringifyJson(events));
+    return { saveId, sessionId: session.sessionId, sessionName: session.name, name, savedAt, sequence: snapshot.sequence };
+  }
+
+  #archiveCurrentSession(name: string, archivedAt: string): void {
+    const session = this.readCurrentWorldSession();
+    if (!session) return;
+    const snapshot = this.readSnapshot();
+    if (!snapshot) return;
+    this.#saveCurrentSession(name, archivedAt);
+    this.#db.prepare(`UPDATE world_sessions SET status='ended', updated_at=? WHERE session_id=?`).run(archivedAt, session.sessionId);
+  }
+
+  #writeSnapshot(state: WorldState): void {
+    const snapshotJson = stringifyJson(state);
+    this.#db.prepare(`INSERT INTO world_snapshots(world_id, sequence, schema_version, content_version, snapshot_json)
+      VALUES ('world', ?, ?, ?, ?) ON CONFLICT(world_id) DO UPDATE SET sequence=excluded.sequence,
+      schema_version=excluded.schema_version, content_version=excluded.content_version, snapshot_json=excluded.snapshot_json`)
+      .run(state.sequence, state.schemaVersion, state.contentVersion, snapshotJson);
   }
 
   #transaction<T>(operation: () => T): T {
@@ -231,6 +668,68 @@ interface EventRow {
   readonly visibility: WorldEvent['visibility'];
   readonly payload_json: string;
   readonly random_draws_json: string;
+}
+
+interface SessionRow {
+  readonly session_id: string;
+  readonly source_save_id: string | null;
+  readonly load_instance_id: string | null;
+  readonly name: string;
+  readonly status: WorldSessionStatus;
+  readonly resident_count: number;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+interface SaveRow {
+  readonly save_id: string;
+  readonly session_id: string;
+  readonly session_name: string;
+  readonly name: string;
+  readonly saved_at: string;
+  readonly sequence: number;
+}
+
+interface LoadSaveRow {
+  readonly save_id: string;
+  readonly session_id: string;
+  readonly snapshot_json: string;
+  readonly events_json: string;
+  readonly status: WorldSessionStatus;
+  readonly resident_count: number;
+}
+
+function toSessionSummary(row: SessionRow): WorldSessionSummary {
+  return { sessionId: row.session_id, loadedSaveId: row.source_save_id, loadInstanceId: row.load_instance_id, name: row.name, status: row.status, residentCount: row.resident_count, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+
+function toSaveSummary(row: SaveRow): WorldSessionSaveSummary {
+  return { saveId: row.save_id, sessionId: row.session_id, sessionName: row.session_name, name: row.name, savedAt: row.saved_at, sequence: row.sequence };
+}
+
+function toMapProfile(row: MapProfileRow): MapProfile {
+  return {
+    mapId: row.map_id,
+    name: row.name,
+    nodes: JSON.parse(row.nodes_json) as JsonValue[],
+    edges: JSON.parse(row.edges_json) as JsonValue[],
+    nodeNotices: JSON.parse(row.node_notices_json) as JsonValue[],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function validateMapProfileContent(content: MapProfileContent): void {
+  for (const [label, value] of [['nodes', content.nodes], ['edges', content.edges], ['node notices', content.nodeNotices]] as const) {
+    if (!Array.isArray(value)) throw new TypeError(`Map profile ${label} must be an array.`);
+    stringifyJson(value);
+  }
+}
+
+function validateMapProfileName(name: string): string {
+  const normalized = name.trim();
+  if (!normalized || normalized.length > 80) throw new Error('地圖名稱須為 1–80 個字元。');
+  return normalized;
 }
 
 function stringifyJson(value: unknown): string {

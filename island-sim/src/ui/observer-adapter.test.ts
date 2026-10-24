@@ -4,7 +4,8 @@ import { loadIslandGraph } from '../content/island.ts';
 import { createInitialWorld } from '../engine/world.ts';
 import { SQLiteWorldStore } from '../persistence/sqlite-store.ts';
 import { ModelSettingsStore, ProcessModelSecrets } from '../ai/model-settings.ts';
-import { SQLiteObserverPort } from './observer-adapter.ts';
+import type { WorldEvent } from '../domain/model.ts';
+import { projectSnapshot, SQLiteObserverPort } from './observer-adapter.ts';
 import { createObserverServer } from './server.ts';
 
 const sourceTables = new URL('../../references/tables/', import.meta.url);
@@ -12,13 +13,21 @@ const sourceTables = new URL('../../references/tables/', import.meta.url);
 test('projects actual persisted source graph and all ten residents without inventing placements or models', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const world = createInitialWorld(graph, { seed: 'observer-adapter-test', contentVersion: 'test-source' });
+  const observedActor = world.actors['resident-01'];
+  assert.ok(observedActor);
+  const observedWorld = {
+    ...world,
+    actors: { ...world.actors, [observedActor.id]: { ...observedActor, lastActionId: 'move:2', lastActionResult: '抵達 Node 2' } },
+  };
   const store = SQLiteWorldStore.open(':memory:');
-  store.commit(0, world, []);
-  const port = new SQLiteObserverPort(store, { speedOptions: [], sourceGraph: graph });
+  store.commit(0, observedWorld, []);
+  const port = new SQLiteObserverPort(store, { sourceGraph: graph });
   const snapshot = await port.readSnapshot();
   assert.equal(snapshot.initialized, true);
   assert.equal(snapshot.map.nodes.length, graph.nodes.length);
+  assert.equal(snapshot.map.edges.length, 51);
   assert.equal(snapshot.residents.length, 10);
+  assert.equal(snapshot.residents.find(({ id }) => id === observedActor.id)?.lastActionResult, '抵達 Node 2');
   assert.ok(snapshot.map.nodes.some((node) => node.regionDescription !== '來源未提供區域描述'));
   for (const sourceNode of graph.nodes) {
     const projected = snapshot.map.nodes.find((node) => node.id === sourceNode.id);
@@ -39,12 +48,86 @@ test('returns an explicit empty-database state instead of sample residents', asy
   store.close();
 });
 
+test('projects settled public message text into the observer timeline', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const world = createInitialWorld(graph, { seed: 'observer-message-test', contentVersion: 'test-source' });
+  const senderId = 'resident-01';
+  const message: WorldEvent = {
+    eventId: 'message-1', sequence: 1, worldTimeT: 1, actorId: senderId, nodeId: world.actors[senderId]?.nodeId ?? null,
+    kind: 'public-message-sent', visibility: 'public', payload: { recipientId: 'resident-02', text: '請到河流集合' }, randomDraws: [],
+  };
+  const snapshot = projectSnapshot({ ...world, sequence: 1 }, [message], { sourceGraph: graph });
+  assert.match(snapshot.events[0]?.description ?? '', /請到河流集合/);
+});
+
+test('projects dungeon resident cells from runtime locations without changing world state', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const world = createInitialWorld(graph, { seed: 'observer-dungeon-map-test', contentVersion: 'test-source' });
+  const resident = world.actors['resident-01'];
+  assert.ok(resident);
+  const dungeonWorld = {
+    ...world,
+    actors: {
+      ...world.actors,
+      [resident.id]: { ...resident, nodeId: null, dungeonLocation: { tripId: 'trip-test', floor: 2, cellId: 'B2' } },
+    },
+    dungeonRuntime: {
+      schemaVersion: 1 as const,
+      tripId: 'trip-test',
+      activeFloor: 2,
+      cellByActorId: { [resident.id]: 'B2' },
+      unlockedFloorByActorId: { [resident.id]: 2 },
+      visitedCells: ['S', 'B1', 'B2'],
+      activeEncounterByCell: {},
+    },
+  };
+  const before = JSON.stringify(dungeonWorld);
+  const projected = projectSnapshot(dungeonWorld, [], { sourceGraph: graph });
+  assert.equal(projected.dungeonMap?.activeFloor, 2);
+  assert.deepEqual(projected.dungeonMap?.cells.find(({ id }) => id === 'S')?.neighbors, ['A1', 'B1', 'C1']);
+  assert.deepEqual(projected.dungeonMap?.residents, [{ actorId: resident.id, floor: 2, cellId: 'B2' }]);
+  assert.equal(projected.residents.find(({ id }) => id === resident.id)?.dungeonCellId, 'B2');
+  assert.equal(JSON.stringify(dungeonWorld), before, 'view projection must not mutate simulation state');
+});
+
+test('routes pause and resume requests to the runtime control port and rejects speed changes', async () => {
+  const store = SQLiteWorldStore.open(':memory:');
+  const calls: string[] = [];
+  const server = createObserverServer(store, {
+    control: {
+      getState: () => ({ paused: false, speedMultiplier: 1 }),
+      pause: () => { calls.push('pause'); },
+      resume: () => { calls.push('resume'); },
+    },
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  try {
+    for (const body of [{ kind: 'pause' }, { kind: 'resume' }]) {
+      const response = await fetch(`${baseUrl}/api/control`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+      assert.equal(response.status, 200);
+    }
+    const speedResponse = await fetch(`${baseUrl}/api/control`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'speed', speedId: 'slow' }),
+    });
+    assert.equal(speedResponse.status, 400);
+    assert.deepEqual(calls, ['pause', 'resume']);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    store.close();
+  }
+});
+
 test('serves the observer page, real snapshot API and strict runtime-only controls over localhost HTTP', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const world = createInitialWorld(graph, { seed: 'observer-http-test', contentVersion: 'test-source' });
   const store = SQLiteWorldStore.open(':memory:');
   store.commit(0, world, []);
-  const server = createObserverServer(store, { speedOptions: [], sourceGraph: graph });
+  const server = createObserverServer(store, { sourceGraph: graph });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
@@ -58,6 +141,12 @@ test('serves the observer page, real snapshot API and strict runtime-only contro
     assert.match(result.markup, /島民 resident-01/);
     assert.match(result.markup, /尚待設定/);
     assert.match(result.markup, /data-control="resume" disabled>恢復/);
+    const dungeonViewResponse = await fetch(`${baseUrl}/api/observer?mapView=dungeon&dungeonFloor=2&dungeonCellId=B2`);
+    const dungeonView = await dungeonViewResponse.json() as { markup: string };
+    assert.match(dungeonView.markup, /<option value="dungeon" selected>地牢<\/option>/);
+    assert.match(dungeonView.markup, /<option value="2" selected>第二層 · 溫泉下水道<\/option>/);
+    assert.match(dungeonView.markup, /data-dungeon-cell="B2"/);
+    assert.equal(store.readSnapshot()?.worldTimeT, world.worldTimeT, 'view selection must not alter simulation state');
     const rejected = await fetch(`${baseUrl}/api/control`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'set-speed', value: 99 }) });
     assert.equal(rejected.status, 400);
   } finally {
@@ -73,7 +162,7 @@ test('saves model settings over HTTP while keeping the API key out of persistenc
   const settings = new ModelSettingsStore(new (await import('node:sqlite')).DatabaseSync(':memory:'));
   const secrets = new ProcessModelSecrets();
   store.commit(0, world, []);
-  const server = createObserverServer(store, { speedOptions: [], sourceGraph: graph }, settings, secrets);
+  const server = createObserverServer(store, { sourceGraph: graph }, settings, secrets);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
@@ -85,7 +174,7 @@ test('saves model settings over HTTP while keeping the API key out of persistenc
       body: JSON.stringify({
         slotId: 1, provider: 'Local test provider', baseUrl: 'http://127.0.0.1:9999/v1', model: 'test-model', modelSizeB: '8',
         sizeAtLeast8BConfirmed: true, styleDescription: '測試用謹慎風格',
-        apiKey: secret, inputUsdPerMillion: '0', outputUsdPerMillion: '0', maxInputTokens: '1000', maxOutputTokens: '200',
+        apiKey: secret, inputUsdPerMillion: '0', outputUsdPerMillion: '0', maxInputTokens: '1000', maxContextCharacters: '12000', maxOutputTokens: '200',
         fallbackModels: 'test-fallback',
       }),
     });
@@ -95,7 +184,7 @@ test('saves model settings over HTTP while keeping the API key out of persistenc
     assert.deepEqual(settings.readSlots()[0], {
       slotId: 1, provider: 'Local test provider', baseUrl: 'http://127.0.0.1:9999/v1', model: 'test-model',
       fallbackModels: ['test-fallback'], inputUsdPerMillion: 0, outputUsdPerMillion: 0,
-      maxInputTokens: 1000, maxOutputTokens: 200, modelSizeB: 8, sizeAtLeast8BConfirmed: true, styleDescription: '測試用謹慎風格', updatedAt: settings.readSlots()[0]?.updatedAt,
+      maxInputTokens: 1000, maxContextCharacters: 12000, maxOutputTokens: 200, modelSizeB: 8, sizeAtLeast8BConfirmed: true, styleDescription: '測試用謹慎風格', updatedAt: settings.readSlots()[0]?.updatedAt,
       credentialRef: settings.readSlots()[0]?.credentialRef,
     });
     const credentialRef = settings.readSlots()[0]?.credentialRef;

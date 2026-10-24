@@ -5,8 +5,10 @@ export type HttpProviderConfig = {
   readonly baseUrl: string;
   readonly model: string;
   readonly apiKey: string;
-  readonly maxOutputTokens: number;
+  /** Legacy model-card value accepted but ignored; each call supplies its own output limit. */
+  readonly maxOutputTokens?: number;
   readonly timeoutMs?: number;
+  readonly includeActualCost?: boolean;
 };
 
 export class HttpChatCompletionsProvider implements ModelProvider {
@@ -19,7 +21,7 @@ export class HttpChatCompletionsProvider implements ModelProvider {
     this.config = config;
     this.fetcher = fetcher;
     this.id = config.id;
-    this.ready = Boolean(config.id && config.baseUrl && config.model && config.apiKey && Number.isSafeInteger(config.maxOutputTokens) && config.maxOutputTokens > 0);
+    this.ready = Boolean(config.id && config.baseUrl && config.model && config.apiKey);
   }
 
   async complete(input: string, maxOutputTokens: number): Promise<ProviderCompletion> {
@@ -37,13 +39,14 @@ export class HttpChatCompletionsProvider implements ModelProvider {
         body: JSON.stringify({
           model: this.config.model,
           messages: [{ role: 'user', content: input }],
-          max_completion_tokens: Math.min(maxOutputTokens, this.config.maxOutputTokens),
+          max_completion_tokens: maxOutputTokens,
+          ...(this.config.includeActualCost ? { usage: { include: true } } : {}),
         }),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`Provider request failed with HTTP ${response.status}.`);
       const payload: unknown = await response.json();
-      return parseCompletion(payload);
+      return parseCompletion(payload, this.config.includeActualCost === true);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('Provider request failed with HTTP ')) throw error;
       throw new Error(error instanceof Error && error.name === 'AbortError' ? 'Provider request timed out.' : 'Provider request failed.');
@@ -53,7 +56,7 @@ export class HttpChatCompletionsProvider implements ModelProvider {
   }
 }
 
-function parseCompletion(value: unknown): ProviderCompletion {
+function parseCompletion(value: unknown, readActualCost: boolean): ProviderCompletion {
   if (!isRecord(value)) throw new Error('Provider response was not a JSON object.');
   const choices = value.choices;
   if (!Array.isArray(choices) || !isRecord(choices[0])) throw new Error('Provider response had no completion choice.');
@@ -62,11 +65,15 @@ function parseCompletion(value: unknown): ProviderCompletion {
   const usage = isRecord(value.usage) ? value.usage : undefined;
   const promptTokens = usage?.prompt_tokens;
   const completionTokens = usage?.completion_tokens;
+  const cost = usage?.cost;
   return {
     raw: message.content,
     ...(typeof promptTokens === 'number' && Number.isSafeInteger(promptTokens) && promptTokens >= 0
       && typeof completionTokens === 'number' && Number.isSafeInteger(completionTokens) && completionTokens >= 0
       ? { usage: { inputTokens: promptTokens, outputTokens: completionTokens } }
+      : {}),
+    ...(readActualCost && typeof cost === 'number' && Number.isFinite(cost) && cost >= 0
+      ? { actualCostUsd: cost }
       : {}),
   };
 }
