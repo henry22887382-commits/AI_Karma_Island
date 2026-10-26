@@ -70,7 +70,13 @@ node --experimental-strip-types src/ui/server.ts
 
 ## 停止與重新啟動
 
-停止服務前，先在觀察台使用存檔功能保存目前遊戲。Windows 使用 `start-island.cmd`，選 **2** 停止或選 **3** 重新啟動；若選單在 5 秒後自動選擇啟動，請等啟動完成後再重新開啟啟動器並選 **2**。啟動器會核對專案管理紀錄或伺服器程序身分；若無法確認連接埠上的程序屬於本專案，會拒絕終止並回報錯誤。直接執行 Node 時，請在執行伺服器的終端機按 `Ctrl+C` 停止，再重新執行啟動命令。
+停止服務前，先在觀察台使用存檔功能保存目前遊戲。Windows 請先在 `island-sim` 專案目錄執行以下 PowerShell 命令停止服務；若提示等待，按 Enter 繼續：
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\island-launcher.ps1 -Action Stop
+```
+
+`start-island.cmd` 保留作為互動式啟動方式。若要重新啟動，可使用啟動器的 `Reboot` 動作或互動選項；重新啟動流程尚未驗證。啟動器會核對專案管理紀錄或伺服器程序身分；若無法確認連接埠上的程序屬於本專案，會拒絕終止並回報錯誤。直接執行 Node 時，請在執行伺服器的終端機按 `Ctrl+C` 停止，再重新執行啟動命令。
 
 ## 網路暴露與尚未驗證事項
 
