@@ -241,7 +241,13 @@ export function startingLocationNodeIds(nodes: readonly Pick<WorldNode, 'id' | '
   return [];
 }
 
-export function initialCampfireNodeIds(nodes: readonly Pick<WorldNode, 'id' | 'isStartingLocation'>[]): string[] {
+export function initialCampfireNodeIds(nodes: readonly {
+  readonly id: string;
+  readonly isStartingLocation?: boolean;
+  readonly initialCampfire?: boolean;
+}[]): string[] {
+  const explicitSettings = nodes.filter((node) => node.initialCampfire !== undefined);
+  if (explicitSettings.length > 0) return explicitSettings.filter((node) => node.initialCampfire === true).map((node) => node.id);
   return [...new Set([...startingLocationNodeIds(nodes), CENTRAL_CAMPFIRE_NODE_ID])];
 }
 

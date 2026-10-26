@@ -22,3 +22,10 @@ cookie-work/helpers/
 **/.aws/
 **/.vscode/
 **/.idea/
+
+# Personal root-level gameplay exports and saves
+/island.sqlite*
+/latest-island-save.*
+/save-*.json
+/save-*.txt
+/save-*.jsonl

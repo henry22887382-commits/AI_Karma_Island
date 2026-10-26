@@ -1,4 +1,5 @@
 import { readCsv, type CsvRow } from './csv.ts';
+import { EMPTY_PRIVATE_READABLE_DOCUMENT_OVERLAY, mergePrivateReadableDocuments, readPrivateReadableDocumentOverlay } from './private-readable-documents.ts';
 import { createActiveSurfaceCapabilities, type ActiveSurfaceCapabilities } from './approved-surface-capabilities.ts';
 import type { IslandGraph } from './island.ts';
 
@@ -26,7 +27,7 @@ export interface SimulationActionContent {
 }
 
 /** Reads authoritative tables as text values; action handlers parse only fields they need and keep blanks unresolved. */
-export async function loadSimulationActionContent(directory: URL): Promise<SimulationActionContent> {
+export async function loadSimulationActionContent(directory: URL, privateDocumentsPath?: string): Promise<SimulationActionContent> {
   const [foods, equipment, fishing, surface, surfaceEntryEvents, recovered, monsters, attackDistributions, dungeonEvents, monsterBonusDrops, surfaceMonsterDrops, containerCategoryWeights, containerItemSubpools, containerItemIdentities, functionalItems, readableDocumentPools, readableDocuments, nodes, nodeNotices] = await Promise.all([
     readCsv(new URL('food.csv', directory)),
     readCsv(new URL('equipment.csv', directory)),
@@ -48,12 +49,22 @@ export async function loadSimulationActionContent(directory: URL): Promise<Simul
     readCsv(new URL('island_nodes.csv', directory)),
     readCsv(new URL('node_notices.csv', directory)),
   ]);
+  let activeReadableDocuments = readableDocuments;
+  if (privateDocumentsPath) {
+    try {
+      const overlay = await readPrivateReadableDocumentOverlay(privateDocumentsPath);
+      activeReadableDocuments = mergePrivateReadableDocuments(readableDocuments, overlay);
+    } catch (error) {
+      console.warn(`私人文本庫讀取失敗，改用公開文本庫：${error instanceof Error ? error.message : String(error)}`);
+      activeReadableDocuments = mergePrivateReadableDocuments(readableDocuments, EMPTY_PRIVATE_READABLE_DOCUMENT_OVERLAY);
+    }
+  }
   const poolTypes = new Set(readableDocumentPools.map((row) => row.pool_type));
   if (!poolTypes.has('book') || !poolTypes.has('drift-bottle') || !poolTypes.has('signboard')) throw new Error('Readable document pools must define book, drift-bottle, and signboard separately.');
-  if (readableDocuments.some((row) => !poolTypes.has(row.pool_type ?? ''))) throw new Error('Readable document references an undefined pool.');
-  validateNodeNoticeBindings(nodeNotices, nodes, readableDocuments);
-  const readableTexts = Object.fromEntries(readableDocuments.map((row) => [row.document_id ?? '', row.text ?? '']));
-  return { foods, equipment, fishing, surface, surfaceEntryEvents, recovered, monsters, attackDistributions, dungeonEvents, monsterBonusDrops, surfaceMonsterDrops, containerCategoryWeights, containerItemSubpools, containerItemIdentities, functionalItems, readableDocumentPools, readableDocuments, nodeNotices, readableTexts, capabilities: createActiveSurfaceCapabilities(nodes) };
+  if (activeReadableDocuments.some((row) => !poolTypes.has(row.pool_type ?? ''))) throw new Error('Readable document references an undefined pool.');
+  validateNodeNoticeBindings(nodeNotices, nodes, activeReadableDocuments);
+  const readableTexts = Object.fromEntries(activeReadableDocuments.map((row) => [row.document_id ?? '', row.text ?? '']));
+  return { foods, equipment, fishing, surface, surfaceEntryEvents, recovered, monsters, attackDistributions, dungeonEvents, monsterBonusDrops, surfaceMonsterDrops, containerCategoryWeights, containerItemSubpools, containerItemIdentities, functionalItems, readableDocumentPools, readableDocuments: activeReadableDocuments, nodeNotices, readableTexts, capabilities: createActiveSurfaceCapabilities(nodes) };
 }
 
 export function actionContentForMapGraph<T extends { readonly nodeNotices?: readonly CsvRow[] }>(

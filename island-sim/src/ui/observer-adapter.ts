@@ -19,6 +19,7 @@ export interface ObserverLifecyclePort {
   read(): NonNullable<ObserverSnapshot['lifecycle']> | null;
   setNextResidentCount?(residentCount: number): void;
   setSetupMapId?(mapId: string): void;
+  refreshTextContent?(): Promise<void>;
   startNew(name?: string, mapId?: string): Promise<void>;
   save(name: string): Promise<void>;
   end(): Promise<void>;
@@ -450,7 +451,7 @@ function describeObserverEvent(event: WorldEvent, state?: WorldState, config?: O
     }
     const entry = isRecord(payload.surfaceEntry) ? payload.surfaceEntry : undefined;
     if (entry?.triggered === true) details.push(describeSurfaceEntry(entry, config, state));
-    if (state?.actors[event.actorId ?? '']?.alive === false) details.push('未能活過這次抵達遭遇');
+    if (isResidentDeadAtEvent(payload, event.actorId)) details.push('抵達時餘命歸零，居民離世');
     return `${actor}抵達${destination}${details.map((detail) => `；${detail}`).join('')}`;
   }
   if (event.kind === 'daily-survival-settled') {
@@ -579,6 +580,13 @@ function describeRewardItems(payload: Record<string, unknown>, state?: WorldStat
   return '';
 }
 
+function isResidentDeadAtEvent(payload: Record<string, unknown>, actorId: string | null): boolean {
+  if (payload.killed === true) return true;
+  if (actorId === null || !Array.isArray(payload.hpChanges)) return false;
+  const change = payload.hpChanges.find((candidate) => isRecord(candidate) && candidate.actorId === actorId);
+  return isRecord(change) && typeof change.remainingHp === 'number' && change.remainingHp <= 0;
+}
+
 function describeSleepRiskEvent(payload: Record<string, unknown>, state?: WorldState): string {
   if (!Array.isArray(payload.checks)) return '夜間睡眠檢查結果資料未提供';
   if (payload.checks.length === 0) return '本次夜間睡眠檢查沒有符合檢查條件的居民';
@@ -591,7 +599,7 @@ function describeSleepRiskEvent(payload: Record<string, unknown>, state?: WorldS
     const enemy = typeof check.enemyName === 'string' && !isMonsterIdentifier(check.enemyName) ? `怪物「${check.enemyName}」` : '怪物（名稱未提供）';
     const change = typeof check.hitPointChange === 'number' && check.hitPointChange < 0 ? `，餘命減少 ${-check.hitPointChange}` : '，餘命變化未記錄';
     const outcome = check.woke === true ? '，受襲後醒來' : check.woke === false ? '，未醒來' : '，醒來狀態未記錄';
-    const death = check.hitPointChange === -1 && state?.actors[typeof check.actorId === 'string' ? check.actorId : '']?.alive === false ? '並離世' : '';
+    const death = isResidentDeadAtEvent(payload, typeof check.actorId === 'string' ? check.actorId : null) ? '，餘命歸零並離世' : '';
     return `${sleeper}睡眠時遭${enemy}襲擊${change}${outcome}${death}${terrain}`;
   });
   return checks.length ? `夜間睡眠遭遇結算：${checks.join('；')}` : '夜間睡眠檢查事件沒有可辨識的居民紀錄';

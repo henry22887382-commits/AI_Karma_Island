@@ -16,9 +16,6 @@ export type AiLegalAction = {
 
 export type AiNarrativeFormatter = (event: WorldEvent, actorId: string) => string | undefined;
 
-const MAX_MEMORY_ENTRIES = 50;
-const MAX_PRIORITY_MEMORY_ENTRIES = 10;
-const MAX_RECENT_MEMORY_ENTRIES = MAX_MEMORY_ENTRIES - MAX_PRIORITY_MEMORY_ENTRIES;
 const ARRIVAL_MEMORY_TEXT = '你在沙灘上醒來，你什麼都不記得了。';
 const PRIORITY_MEMORY_KINDS = new Set([
   'resident-attacked', 'monster-action-settled', 'public-message-sent', 'object-read',
@@ -50,8 +47,8 @@ function boundResidentMemory(entries: readonly ResidentAiMemoryEntry[]): readonl
 }
 
 function promptMemoryCandidates(entries: readonly ResidentAiMemoryEntry[]) {
-  const priority = entries.filter((entry) => entry.importance === 'priority' && entry.kind !== 'arrival-memory').slice(-MAX_PRIORITY_MEMORY_ENTRIES);
-  const recent = entries.filter((entry) => entry.importance === 'recent').slice(-MAX_RECENT_MEMORY_ENTRIES);
+  const priority = entries.filter((entry) => entry.importance === 'priority' && entry.kind !== 'arrival-memory');
+  const recent = entries.filter((entry) => entry.importance === 'recent');
   return [...priority, ...recent].sort((left, right) => left.sequence - right.sequence);
 }
 

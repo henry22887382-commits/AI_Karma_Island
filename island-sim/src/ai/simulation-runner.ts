@@ -42,6 +42,10 @@ export class SimulationRunner {
   private inStep = false;
   private activeStepController: AbortController | null = null;
   private readonly routerHealth = new Map<string, RouterHealth>();
+  private pendingReadableDocumentUpdate: {
+    content: Pick<SimulationActionContent, 'readableDocuments' | 'readableTexts'>;
+    waiters: (() => void)[];
+  } | null = null;
 
   constructor(options: SimulationRunnerOptions) {
     this.store = options.store;
@@ -67,6 +71,23 @@ export class SimulationRunner {
     if (this.inStep) throw new Error('模擬事件處理中，無法切換地圖。');
     this.graph = graph;
     this.actionContent = actionContent;
+  }
+
+  async setReadableDocumentContent(
+    content: Pick<SimulationActionContent, 'readableDocuments' | 'readableTexts'>,
+  ): Promise<void> {
+    if (!this.inStep) {
+      this.applyReadableDocumentContent(content);
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      if (this.pendingReadableDocumentUpdate) {
+        this.pendingReadableDocumentUpdate.content = content;
+        this.pendingReadableDocumentUpdate.waiters.push(resolve);
+      } else {
+        this.pendingReadableDocumentUpdate = { content, waiters: [resolve] };
+      }
+    });
   }
 
   async pauseAndWait(): Promise<void> {
@@ -211,7 +232,20 @@ export class SimulationRunner {
     } finally {
       if (this.activeStepController === stepController) this.activeStepController = null;
       this.inStep = false;
+      const pendingReadableDocumentUpdate = this.pendingReadableDocumentUpdate;
+      if (pendingReadableDocumentUpdate) {
+        this.pendingReadableDocumentUpdate = null;
+        this.applyReadableDocumentContent(pendingReadableDocumentUpdate.content);
+        pendingReadableDocumentUpdate.waiters.forEach((resolve) => resolve());
+      }
     }
+  }
+
+  private applyReadableDocumentContent(
+    content: Pick<SimulationActionContent, 'readableDocuments' | 'readableTexts'>,
+  ): void {
+    if (!this.actionContent) return;
+    this.actionContent = { ...this.actionContent, ...content };
   }
 
   private async runLoop(): Promise<void> {

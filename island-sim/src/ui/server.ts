@@ -1211,10 +1211,13 @@ export async function startObserverServer(): Promise<void> {
   const store = SQLiteWorldStore.open(databasePath);
   const modelSettings = ModelSettingsStore.open(resolve(process.env.ISLAND_SETTINGS_DB_PATH ?? './data/model-settings.sqlite'));
   const baseGraph = await loadIslandGraph(new URL('../../references/tables/', import.meta.url));
-  const baseActionContent: SimulationActionContent = await loadSimulationActionContent(new URL('../../references/tables/', import.meta.url));
+  let baseActionContent: SimulationActionContent = await loadSimulationActionContent(
+    new URL('../../references/tables/', import.meta.url),
+    resolve(moduleDirectory, '../../data/private-readable-documents.json'),
+  );
   const editorData = await readEditorData(resolve(moduleDirectory, '../..'));
   const defaultProfile = store.ensureDefaultMapProfile(editorMapContent(editorData));
-  const monumentValleyDefaultDocuments = (baseActionContent.readableDocuments ?? [])
+  let monumentValleyDefaultDocuments = (baseActionContent.readableDocuments ?? [])
     .filter((row) => row.pool_type === 'monument-valley' && (row.text ?? '').trim().length > 0)
     .flatMap((row) => row.document_id ? [{ id: row.document_id, text: row.text ?? '' }] : []);
   const contentVersion = await sourceVersion();
@@ -1260,6 +1263,22 @@ export async function startObserverServer(): Promise<void> {
     },
     setNextResidentCount: (residentCount) => { configuredResidentCount = residentCount; },
     setSetupMapId: (mapId) => { if (!store.readMapProfile(mapId)) throw new Error('找不到指定地圖存檔。'); selectedSetupMapId = mapId; },
+    refreshTextContent: async () => {
+      const refreshed = await loadSimulationActionContent(
+        new URL('../../references/tables/', import.meta.url),
+        resolve(moduleDirectory, '../../data/private-readable-documents.json'),
+      );
+      const updatedDocuments = {
+        readableDocuments: refreshed.readableDocuments,
+        readableTexts: refreshed.readableTexts,
+      };
+      baseActionContent = { ...baseActionContent, ...updatedDocuments };
+      actionContent = { ...actionContent, ...updatedDocuments };
+      monumentValleyDefaultDocuments = refreshed.readableDocuments
+        .filter((row) => row.pool_type === 'monument-valley' && (row.text ?? '').trim().length > 0)
+        .flatMap((row) => row.document_id ? [{ id: row.document_id, text: row.text ?? '' }] : []);
+      await runner.setReadableDocumentContent(updatedDocuments);
+    },
     startNew: async (name, mapId) => {
       const current = store.readCurrentWorldSession();
       if (current?.status === 'in-progress') throw new Error('請先結束目前遊戲，再開始新局。');
@@ -1436,14 +1455,15 @@ async function handleRequest(
             : store.createMapProfile(mapData.mapName || '新地圖', content);
         } catch (error) {
           try {
-            await copyFile(resolve(backup, 'readable_documents.csv'), resolve(editorRoot, 'references/tables/readable_documents.csv'));
+            await copyFile(resolve(backup, 'private-readable-documents.json'), resolve(editorRoot, 'data/private-readable-documents.json'));
           } catch (restoreError) {
             const failure = error instanceof Error ? error.message : String(error);
             const recovery = restoreError instanceof Error ? restoreError.message : String(restoreError);
-            throw new Error(`地圖存檔更新失敗；共享文本復原也失敗，備份保留於 ${backup}。更新錯誤：${failure}；復原錯誤：${recovery}`);
+            throw new Error(`地圖存檔更新失敗；私人文本復原也失敗，備份保留於 ${backup}。更新錯誤：${failure}；復原錯誤：${recovery}`);
           }
           throw error;
         }
+        await lifecycle?.refreshTextContent?.();
         sendJson(response, 200, { saved: true, mapId: profile.mapId, mapName: profile.name, backup });
       } else {
         const editorData = body as Parameters<typeof saveEditorData>[1];

@@ -9,6 +9,8 @@ export interface IslandNode {
   readonly visualType: string;
   readonly surfaceTerrain: SurfaceTerrainClassification | null;
   readonly isStartingLocation?: boolean;
+  /** Optional per-map-profile initial campfire setting; absent preserves legacy defaults. */
+  readonly initialCampfire?: boolean;
   readonly daySurfaceEntryEventsEnabled?: boolean;
   readonly label: string | null;
   readonly labelStatus: string;
@@ -43,11 +45,14 @@ export function islandGraphFromProfile(
     const row = rows.get(original.id)!;
     const terrain = parseSurfaceTerrain(profileValue(row, 'surface_terrain'), original.id);
     const starting = profileValue(row, 'starting_location');
+    const initialCampfire = profileValue(row, 'initial_campfire');
     if (starting !== '' && !['true', 'false'].includes(starting)) throw new Error(`Node ${original.id} 出生點設定無效。`);
+    if (initialCampfire !== '' && !['true', 'false'].includes(initialCampfire)) throw new Error(`Node ${original.id} 營火設定無效。`);
     return {
       ...original,
       surfaceTerrain: terrain,
       isStartingLocation: starting === '' ? original.isStartingLocation ?? false : starting === 'true',
+      initialCampfire: initialCampfire === '' ? original.initialCampfire : initialCampfire === 'true',
       visualType: profileValue(row, 'visual_type') || original.visualType,
       label: profileValue(row, 'node_label') || null,
       labelStatus: profileValue(row, 'label_status') || original.labelStatus,
@@ -85,13 +90,18 @@ export async function loadIslandGraph(directory: URL): Promise<IslandGraph> {
     const isStartingLocation = row.starting_location === undefined
       ? LEGACY_START_BEACH_NODE_IDS.includes(nodeId as typeof LEGACY_START_BEACH_NODE_IDS[number])
       : row.starting_location === 'true';
+    const initialCampfire = row.initial_campfire;
     if (row.starting_location !== undefined && row.starting_location !== '' && !['true', 'false'].includes(row.starting_location)) {
       throw new Error(`Node ${nodeId} has unsupported starting_location value ${row.starting_location}.`);
+    }
+    if (initialCampfire !== undefined && initialCampfire !== '' && !['true', 'false'].includes(initialCampfire)) {
+      throw new Error(`Node ${nodeId} has unsupported initial_campfire value ${initialCampfire}.`);
     }
     return {
       id: nodeId,
       surfaceTerrain,
       isStartingLocation,
+      initialCampfire: initialCampfire === undefined || initialCampfire === '' ? undefined : initialCampfire === 'true',
       visualType: required(row, 'visual_type'),
       daySurfaceEntryEventsEnabled: allowsDaySurfaceEntryEvents(surfaceTerrain),
       label: row.node_label ? row.node_label : null,
