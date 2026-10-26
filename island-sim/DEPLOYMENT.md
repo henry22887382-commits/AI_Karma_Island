@@ -103,6 +103,8 @@ node --experimental-strip-types src/ui/server.ts
 
 啟動後開啟內容工房，在模型設定中建立模型卡並填入供應商、API Base URL、模型與 API 金鑰。設定與金鑰保存在 `ISLAND_SETTINGS_DB_PATH` 指向的 SQLite 資料庫。不要把金鑰寫進命令列範例、版控檔案或公開 issue；變更資料庫路徑時，也要一併保留或遷移這個資料庫。
 
+OpenRouter 使用者可參考[官方 Quickstart 教學](https://openrouter.ai/docs/quickstart)建立 API 金鑰、查詢模型 ID 並確認 API 用法；建立金鑰請到 [OpenRouter API Keys](https://openrouter.ai/settings/keys)。在本專案模型卡中，OpenRouter 的 API Base URL 填 `https://openrouter.ai/api/v1`。請將金鑰直接填入內容工房，不要貼到公開貼文或版控檔案。
+
 ## 停止與重新啟動
 
 停止服務前，先在觀察台使用存檔功能保存目前遊戲。Windows 使用同一個 `start-island.cmd` 啟動與停止：重新開啟它，在選單出現時按 `2` 停止服務。選單 5 秒後預設啟動，因此請在倒數結束前按下 `2`。成功後視窗會等待按鍵再關閉。
