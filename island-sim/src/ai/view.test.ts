@@ -64,9 +64,9 @@ test('builds a Node-scoped AI snapshot without integer clock, other inventory, o
   assert.match(built.input.narration, /self\.remaining_life 代表目前餘命/);
 });
 
-test('does not synthesize narration when an eligible settled event lacks a source-backed template', () => {
+test('skips an eligible event without a source-backed template instead of stopping simulation', () => {
   const built = buildAiInput(state, '1.1', legalActions, [{ ...events[1]!, payload: {} }], () => undefined);
-  assert.deepEqual(built, { ok: false, unresolved: ['event:same-node:missing-narrative'] });
+  assert.equal(built.ok, true);
 });
 
 test('does not include a Node event while the resident is travelling', () => {
