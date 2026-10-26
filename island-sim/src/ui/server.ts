@@ -90,6 +90,7 @@ let pendingSetupAssignments = 0;
 let backgroundRefreshPending = false;
 let intentRefreshInFlight = false;
 let lifecycleBusy = false;
+let summarizerSaveInFlight = false;
 let refreshSequence = 0;
 let historyPageAnchor = null;
 function syncObserverUrl() {
@@ -162,6 +163,15 @@ function captureDrafts() {
       formDrafts.set(slot + ':' + field.name, value);
     }
   }
+  for (const form of root.querySelectorAll('form[data-summarizer-settings]')) {
+    const promptField = form.querySelector('textarea[name="prompt"]');
+    const formKey = promptField?.id || 'default';
+    for (const field of form.querySelectorAll('select[name],textarea[name]')) {
+      formDrafts.set('summarizer:' + formKey + ':' + field.name, field.value);
+    }
+    const feedback = form.querySelector('[data-summarizer-feedback]');
+    if (feedback) formDrafts.set('summarizer-feedback:' + formKey, feedback.textContent || '');
+  }
 }
 function restoreDrafts() {
   const slotSelect = root.querySelector('[data-slot-select]');
@@ -192,6 +202,17 @@ function restoreDrafts() {
       const selectedModel = formDrafts.get(slot + ':model') || modelSelect.value;
       applyLoadedModelList(form, cachedModels, selectedModel, form.querySelector('[name="baseUrl"]').value.trim() !== cachedModels.baseUrl);
     }
+  }
+  for (const form of root.querySelectorAll('form[data-summarizer-settings]')) {
+    const promptField = form.querySelector('textarea[name="prompt"]');
+    const formKey = promptField?.id || 'default';
+    for (const field of form.querySelectorAll('select[name],textarea[name]')) {
+      const value = formDrafts.get('summarizer:' + formKey + ':' + field.name);
+      if (value !== undefined) field.value = value;
+    }
+    const feedback = form.querySelector('[data-summarizer-feedback]');
+    const feedbackValue = formDrafts.get('summarizer-feedback:' + formKey);
+    if (feedback && feedbackValue !== undefined) feedback.textContent = feedbackValue;
   }
 }
 function syncSetupAssignmentPendingState() {
@@ -524,6 +545,7 @@ function showControlFeedback(message) {
 }
 async function refresh(options = {}) {
   if (options.background && lifecycleBusy) return;
+  if (summarizerSaveInFlight) { backgroundRefreshPending = true; return; }
   if (options.background && hasFocusedEditingControl()) {
     backgroundRefreshPending = true;
     return;
@@ -1150,17 +1172,32 @@ root.addEventListener('submit', async (event) => {
   const form = event.target.closest('form[data-summarizer-settings]');
   if (!form) return;
   event.preventDefault();
+  if (summarizerSaveInFlight) return;
   const feedback = form.querySelector('[data-summarizer-feedback]');
   const fields = new FormData(form);
+  const submitButton = form.querySelector('button[type="submit"]');
+  const promptField = form.querySelector('textarea[name="prompt"]');
+  const submittedPrompt = String(fields.get('prompt') || '').trim();
+  captureDrafts();
+  summarizerSaveInFlight = true;
+  if (submitButton) submitButton.disabled = true;
   feedback.textContent = '正在儲存死亡總結者設定…';
   try {
-  const response = await fetch('/api/settings/summarizer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ modelSlotId: fields.get('modelSlotId') || null, prompt: fields.get('prompt') || '' }) });
+    const response = await fetch('/api/settings/summarizer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ modelSlotId: fields.get('modelSlotId') || null, prompt: submittedPrompt }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '死亡總結者設定未儲存。');
+    if (result.saved !== true || result.prompt !== submittedPrompt) throw new Error(result.error || '死亡總結設定未能確認保存，原輸入仍保留。');
+    if (promptField) promptField.value = result.prompt;
     feedback.textContent = result.ready ? '已儲存；摘要會使用此模型卡的設定與金鑰。' : '已儲存選擇；模型卡尚未完成設定或保存金鑰。';
     captureDrafts();
-    await refresh();
-  } catch (error) { feedback.textContent = error instanceof Error ? error.message : '死亡總結者設定未儲存。'; }
+  } catch (error) {
+    feedback.textContent = error instanceof Error ? error.message : '死亡總結者設定未儲存。';
+    captureDrafts();
+  }
+  finally {
+    summarizerSaveInFlight = false;
+    if (submitButton?.isConnected) submitButton.disabled = false;
+  }
 });
 root.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-retry-death-summary]');
@@ -1641,10 +1678,12 @@ async function handleRequest(
     const text = (key: string): string | null => typeof body[key] === 'string' && String(body[key]).trim() ? String(body[key]).trim() : null;
     const modelSlotId = body.modelSlotId === null || body.modelSlotId === '' ? null : Number(body.modelSlotId);
     if (modelSlotId !== null && !Number.isSafeInteger(modelSlotId)) { sendJson(response, 400, { error: '請選擇有效的模型卡。' }); return; }
-    const saved = modelSettings.saveSummarizer({ modelSlotId, prompt: String(body.prompt ?? '').trim() });
+    const prompt = String(body.prompt ?? '').trim();
+    const saved = modelSettings.saveSummarizer({ modelSlotId, prompt });
+    if (saved.prompt !== prompt || saved.modelSlotId !== modelSlotId) { sendJson(response, 500, { error: '死亡總結設定未能確認保存，請保留原輸入並重試。' }); return; }
     const slot = modelSettings.readSlots().find(({ slotId }) => slotId === saved.modelSlotId);
     const ready = Boolean(slot && isModelSlotReady(slot, secrets.has(slot.credentialRef)));
-    sendJson(response, 200, { saved: true, ready, apiKeyConfigured: Boolean(slot && secrets.has(slot.credentialRef)) });
+    sendJson(response, 200, { saved: true, ready, prompt: saved.prompt, apiKeyConfigured: Boolean(slot && secrets.has(slot.credentialRef)) });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/death-summaries/retry') {
