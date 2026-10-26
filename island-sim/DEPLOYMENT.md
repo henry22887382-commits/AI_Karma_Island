@@ -5,7 +5,7 @@
 ## 執行需求與依賴檢查
 
 - Node.js **24.15.0 或更新版本**。伺服器以 Node 內建模組執行，包含 `node:sqlite`，不需要第三方 runtime 套件。
-- `package.json` 沒有 `dependencies`；`typescript` 與 `@types/node` 僅列在 `devDependencies`，供型別檢查與開發使用。直接執行伺服器不必先執行 `npm install`。
+- `package.json` 沒有 `dependencies`；`typescript` 與 `@types/node` 僅列在 `devDependencies`，供型別檢查與開發使用。直接執行伺服器不必先執行 `npm install`，也不需安裝或編譯原生模組。
 - Windows 啟動器另外檢查 `node_modules` 資料夾是否存在。若要使用啟動器，先在專案根目錄執行 `npm ci`；這會依鎖定檔安裝開發依賴。若要維持最少安裝，可略過啟動器，直接用 Node 執行伺服器。
 - 執行時必須保留 `src/`、`references/tables/` 中伺服器載入的 CSV，以及 `src/ui/observer.css` 等 UI 檔案。不要只複製編譯輸出或移除參考資料目錄。
 - Docker／其他容器映像未驗證。以下方式不代表容器化或對外部署已完成。
@@ -70,10 +70,10 @@ node --experimental-strip-types src/ui/server.ts
 
 ## 停止與重新啟動
 
-Windows 使用 `start-island.cmd`：選 **2** 停止由本啟動器確認管理的服務，選 **3** 重新啟動。直接執行 Node 時，請在執行伺服器的終端機按 `Ctrl+C` 停止，再重新執行啟動命令。
+停止服務前，先在觀察台使用存檔功能保存目前遊戲。Windows 使用 `start-island.cmd`，選 **2** 停止或選 **3** 重新啟動；若選單在 5 秒後自動選擇啟動，請等啟動完成後再重新開啟啟動器並選 **2**。啟動器會核對專案管理紀錄或伺服器程序身分；若無法確認連接埠上的程序屬於本專案，會拒絕終止並回報錯誤。直接執行 Node 時，請在執行伺服器的終端機按 `Ctrl+C` 停止，再重新執行啟動命令。
 
 ## 網路暴露與尚未驗證事項
 
 目前觀察台、內容工房及相關寫入、控制、設定 API 路由沒有認證。預設綁定 `127.0.0.1`，只供本機使用。**不要把服務直接暴露到網際網路，也不要把 `ISLAND_HOST` 設為 `0.0.0.0` 後放在不受控網路上。** 受控內網使用仍須由管理者評估網路隔離與存取範圍；公開服務前，必須先加入並驗證認證、權限控管、CSRF 防護等安全措施。
 
-Docker／容器化尚未測試。本環境的完整 `npm test` 未通過：有 loopback 權限錯誤（`EACCES`）及其他斷言失敗；因此不能據此宣稱完整測試、容器部署或對外部署成功。此文件僅記錄本機執行路徑與目前已知限制。
+在 Windows、Node.js 24.16.0、主版本 HEAD `4659f90` 上，完整 `npm test` 的 **302/302** 項測試通過，`npm run typecheck` 也通過。Docker／容器化尚未測試；測試結果只涵蓋上述版本與環境，不代表容器部署或對外部署已完成。本文件僅記錄本機執行路徑與目前已知限制。
