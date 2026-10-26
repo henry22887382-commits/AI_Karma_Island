@@ -380,29 +380,18 @@ export class SQLiteWorldStore {
   }
 
   reserveCost(request: CostReservationRequest): CostReservationResult {
-    const cap = 20;
     assertMoney(request.maximumUsd, 'Maximum cost', true);
-    assertMoney(cap, 'Monthly cap');
     const date = new Date(request.atIso);
     if (!Number.isFinite(date.getTime())) throw new Error('Reservation timestamp must be a valid ISO date.');
     const period = date.toISOString().slice(0, 7);
     const reservationId = randomUUID();
 
     return this.#transaction(() => {
-      const row = this.#db.prepare(`
-        SELECT COALESCE(SUM(CASE WHEN status = 'reserved' THEN reserved_usd ELSE actual_usd END), 0) AS committed
-        FROM cost_reservations WHERE period_utc = ?
-      `).get(period) as { committed: number };
-      const committed = Number(row.committed);
-      const remaining = Math.max(0, cap - committed);
-      if (committed + request.maximumUsd > cap + Number.EPSILON) {
-        return { allowed: false, reservationId: null, remainingUsd: remaining };
-      }
       this.#db.prepare(`
         INSERT INTO cost_reservations(reservation_id, request_id, period_utc, created_at, reserved_usd, status)
         VALUES (?, ?, ?, ?, ?, 'reserved')
       `).run(reservationId, request.requestId, period, date.toISOString(), request.maximumUsd);
-      return { allowed: true, reservationId, remainingUsd: Math.max(0, remaining - request.maximumUsd) };
+      return { allowed: true, reservationId, remainingUsd: null };
     });
   }
 
@@ -414,18 +403,10 @@ export class SQLiteWorldStore {
         SELECT period_utc, reserved_usd, status FROM cost_reservations WHERE reservation_id = ?
       `).get(request.reservationId) as { period_utc: string; reserved_usd: number; status: string } | undefined;
       if (row === undefined || row.status !== 'reserved') throw new Error('Cost reservation is missing or already settled.');
-      const cap = 20;
-      const overrun = request.actualUsd > Number(row.reserved_usd) + Number.EPSILON;
       this.#db.prepare(`
         UPDATE cost_reservations SET actual_usd = ?, status = ?, record_json = ? WHERE reservation_id = ?
-      `).run(request.actualUsd, overrun ? 'overrun' : 'settled', recordJson, request.reservationId);
-      const total = this.#db.prepare(`
-        SELECT COALESCE(SUM(CASE WHEN status = 'reserved' THEN reserved_usd ELSE actual_usd END), 0) AS committed
-        FROM cost_reservations WHERE period_utc = ?
-      `).get(row.period_utc) as { committed: number };
-      const committed = Number(total.committed);
-      const unknown = this.#db.prepare('SELECT 1 AS found FROM unpriced_provider_calls WHERE period_utc=? LIMIT 1').get(row.period_utc);
-      return { exceededCap: committed > cap + Number.EPSILON, remainingUsd: unknown ? null : Math.max(0, cap - committed) };
+      `).run(request.actualUsd, 'settled', recordJson, request.reservationId);
+      return { exceededCap: false, remainingUsd: null };
     });
   }
 
@@ -486,9 +467,7 @@ export class SQLiteWorldStore {
         (reservation_id, request_id, period_utc, created_at, reserved_usd, status, actual_usd, record_json)
         VALUES (?, ?, ?, ?, ?, 'settled', ?, ?)`)
         .run(reservationId, input.requestId, recordedAt.slice(0, 7), recordedAt, input.costUsd, input.costUsd, stringifyJson(record));
-      const total = this.#db.prepare(`SELECT COALESCE(SUM(CASE WHEN status='reserved' THEN reserved_usd ELSE actual_usd END), 0) AS committed
-        FROM cost_reservations WHERE period_utc=?`).get(recordedAt.slice(0, 7)) as { committed: number };
-      return { exceededCap: Number(total.committed) > 20 + Number.EPSILON };
+      return { exceededCap: false };
     });
   }
 
@@ -508,7 +487,7 @@ export class SQLiteWorldStore {
     const unknownRows = this.#db.prepare('SELECT DISTINCT provider_id FROM unpriced_provider_calls WHERE period_utc=? ORDER BY provider_id').all(periodUtc) as unknown as readonly { provider_id: string }[];
     const unknownProviderIds = unknownRows.map(({ provider_id }) => provider_id);
     const accountingComplete = unknownProviderIds.length === 0;
-    return { periodUtc, settledUsd, reservedUsd, committedUsd, remainingUsd: accountingComplete ? Math.max(0, 20 - committedUsd) : null, accountingComplete, unknownProviderIds };
+    return { periodUtc, settledUsd, reservedUsd, committedUsd, remainingUsd: null, accountingComplete, unknownProviderIds };
   }
 
   close(): void {

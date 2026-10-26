@@ -232,39 +232,6 @@ export type CostLedger = {
   recordActualCost?(input: CostRecord & { readonly requestId: string }): Promise<{ readonly exceededCap: boolean }>;
 };
 
-export type CostGate =
-  | { readonly allowed: true; readonly reservationId: string; readonly reservationUsd: number }
-  | { readonly allowed: false; readonly reason: 'pricing_unconfigured' | 'monthly_cap' };
-
-export async function reserveMaximumCallCost(
-  pricing: ProviderPricing | undefined,
-  maxOutputTokens: number,
-  ledger: CostLedger,
-  now: Date,
-  requestId: string,
-): Promise<CostGate> {
-  if (!pricing || !Number.isFinite(pricing.inputUsdPerMillionTokens) || pricing.inputUsdPerMillionTokens < 0
-    || !Number.isFinite(pricing.outputUsdPerMillionTokens) || pricing.outputUsdPerMillionTokens < 0
-    || !Number.isSafeInteger(pricing.maxInputTokens) || pricing.maxInputTokens < 1
-    || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 0) {
-    return { allowed: false, reason: 'pricing_unconfigured' };
-  }
-
-  const reservationUsd = (
-    pricing.maxInputTokens * pricing.inputUsdPerMillionTokens
-    + maxOutputTokens * pricing.outputUsdPerMillionTokens
-  ) / 1_000_000;
-  const reservation = await ledger.reserveCost({
-    requestId,
-    atIso: now.toISOString(),
-    maximumUsd: reservationUsd,
-  });
-  if (!reservation.allowed || reservation.reservationId === null) {
-    return { allowed: false, reason: 'monthly_cap' };
-  }
-  return { allowed: true, reservationUsd, reservationId: reservation.reservationId };
-}
-
 export type RouterHealth = {
   readonly primaryFailures: number;
   readonly activeProvider: 'primary' | 'fallback';
@@ -323,7 +290,7 @@ export type RouterActionProposal = {
 };
 
 export class ProviderBudgetBlockedError extends Error {
-  constructor(message = '模型呼叫因月預算上限或價格設定而停止。') {
+  constructor(message: string) {
     super(message);
     this.name = 'ProviderBudgetBlockedError';
   }

@@ -37,10 +37,6 @@ export class BudgetedModelProvider implements ModelProvider {
       atIso: now.toISOString(),
       maximumUsd,
     });
-    if (!reservation.allowed || reservation.reservationId === null) {
-      throw new ProviderBudgetBlockedError('月費用上限不足，模型呼叫已在送出前阻止。');
-    }
-
     let completion: ProviderCompletion;
     try {
       completion = await this.inner.complete(prompt, maxOutputTokens, context);
@@ -52,8 +48,22 @@ export class BudgetedModelProvider implements ModelProvider {
       await this.recordUnknown(requestId, completion.usage, now, context);
       return completion;
     }
-    const settled = await this.settle(reservation.reservationId, completion, now, context);
-    if (settled.exceededCap) throw new ProviderBudgetBlockedError('模型回報用量超出預留費用；已停止後續模型呼叫。');
+    if (reservation.reservationId !== null) {
+      await this.settle(reservation.reservationId, completion, now, context);
+    } else {
+      const actualCost = completion.actualCostUsd;
+      if (actualCost !== undefined) {
+        await this.ledger.recordActualCost?.({
+          requestId, providerId: this.id,
+          category: context.retry ? 'retry' : context.operation === 'action'
+            ? (selectedMessageAction(completion.raw, context.messageActionIds) ? 'message' : 'prompt')
+            : context.operation,
+          inputTokens: completion.usage?.inputTokens ?? null,
+          outputTokens: completion.usage?.outputTokens ?? null,
+          costUsd: actualCost, recordedAt: now.toISOString(),
+        });
+      }
+    }
     return completion;
   }
 
