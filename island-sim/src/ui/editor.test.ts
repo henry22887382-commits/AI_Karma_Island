@@ -205,7 +205,7 @@ test('editor CSV save and reload preserves text CRUD, map edits, and runtime-rea
   assert.ok(documentToDelete);
   const deletedDocumentId = documentToDelete.document_id;
   const cardId = 'editor-roundtrip-card';
-  data.documents.push({ document_id: cardId, pool_type: 'book', text: '初稿', status: 'draft' });
+  data.documents.push({ document_id: cardId, pool_type: 'signboard', text: '初稿', status: 'draft' });
   const card = data.documents.find((document) => document.document_id === cardId);
   assert.ok(card);
   Object.assign(card, {

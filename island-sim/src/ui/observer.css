@@ -128,7 +128,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="button"]
 .world-node-scene:has(.node-scene-card) { height: auto; }
 .node-scene-card { --scene-sky: #c8e4df; --scene-far: #9dbf9c; --scene-near: #64876b; --scene-ground: #66744d; position: relative; display: flex; min-height: 420px; flex-direction: column; overflow: hidden; isolation: isolate; border: 1px solid #34493c; border-radius: 18px; background: var(--scene-sky); color: #1e302b; box-shadow: 0 14px 36px #16291b24; }
 .node-scene-card.terrain-beach, .node-scene-card.terrain-coconut-beach { --scene-sky: #c5e6e7; --scene-far: #e9d59d; --scene-near: #d5bd7c; --scene-ground: #d5bd7c; }
-.node-scene-card.terrain-forest { --scene-sky: #c9e1cf; --scene-far: #769a6e; --scene-near: #456a50; --scene-ground: #63734d; }
+.node-scene-card.terrain-forest, .node-scene-card.terrain-berry-forest { --scene-sky: #c9e1cf; --scene-far: #769a6e; --scene-near: #456a50; --scene-ground: #63734d; }
 .node-scene-card.terrain-river { --scene-sky: #bfe1e2; --scene-far: #80b5a7; --scene-near: #549395; --scene-ground: #4e8582; }
 .node-scene-card.terrain-rock, .node-scene-card.terrain-dungeon-entrance { --scene-sky: #d6d4c8; --scene-far: #aaa99b; --scene-near: #797d74; --scene-ground: #656c66; }
 .node-scene-card.terrain-port { --scene-sky: #c6e0e4; --scene-far: #91b7b2; --scene-near: #638d91; --scene-ground: #65818a; }
@@ -220,6 +220,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="button"]
 .map-node.terrain-beach circle { fill: #f0dfad; stroke: #a77b3d; }
 .map-node.terrain-coconut-beach circle { fill: #ead89c; stroke: #9c7540; }
 .map-node.terrain-forest circle { fill: #cbd8b9; stroke: #55754c; }
+.map-node.terrain-berry-forest circle { fill: #a9ce9d; stroke: #417b4e; }
 .map-node.terrain-river circle { fill: #c3ded8; stroke: #397d83; }
 .map-node.terrain-rock circle, .map-node.terrain-dungeon-entrance circle { fill: #d5d2c5; stroke: #6f776f; }
 .map-node.terrain-port circle { fill: #c7d6d7; stroke: #557b91; }
@@ -242,6 +243,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="button"]
 .map-legend .terrain-beach { color: #a77b3d; background: #f0dfad; }
 .map-legend .terrain-coconut-beach { color: #9c7540; background: #ead89c; }
 .map-legend .terrain-forest { color: #55754c; background: #cbd8b9; }
+.map-legend .terrain-berry-forest { color: #417b4e; background: #a9ce9d; }
 .map-legend .terrain-river { color: #397d83; background: #c3ded8; }
 .map-legend .terrain-rock { color: #6f776f; background: #d5d2c5; }
 .map-legend .terrain-port { color: #557b91; background: #c7d6d7; }

@@ -1,4 +1,4 @@
-import type { ModelProvider, ProviderCompletion } from './router.ts';
+import type { ModelProvider, ProviderCallContext, ProviderCompletion } from './router.ts';
 
 export type HttpProviderConfig = {
   readonly id: string;
@@ -24,11 +24,12 @@ export class HttpChatCompletionsProvider implements ModelProvider {
     this.ready = Boolean(config.id && config.baseUrl && config.model && config.apiKey);
   }
 
-  async complete(input: string, maxOutputTokens: number): Promise<ProviderCompletion> {
+  async complete(input: string, maxOutputTokens: number, context?: ProviderCallContext): Promise<ProviderCompletion> {
     if (!this.ready) throw new Error('Provider is not configured.');
     const endpoint = new URL('chat/completions', `${this.config.baseUrl.replace(/\/+$/, '')}/`);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 30_000);
+    const signal = context?.signal ? AbortSignal.any([controller.signal, context.signal]) : controller.signal;
     try {
       const response = await this.fetcher(endpoint, {
         method: 'POST',
@@ -42,7 +43,7 @@ export class HttpChatCompletionsProvider implements ModelProvider {
           max_completion_tokens: maxOutputTokens,
           ...(this.config.includeActualCost ? { usage: { include: true } } : {}),
         }),
-        signal: controller.signal,
+        signal,
       });
       if (!response.ok) throw new Error(`Provider request failed with HTTP ${response.status}.`);
       const payload: unknown = await response.json();

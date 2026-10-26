@@ -2,14 +2,14 @@
 export const SURFACE_USER_RULE_OVERRIDES = {
   entry: {
     sourceId: 'user-supplied-complete-surface-rules-2026-10-22',
-    triggerPercentByTerrain: { beach: 10, forest: 15, river: 15, rock: 20 },
-    nightTriggerPercentByTerrain: { beach: 15, forest: 25, river: 20, rock: 25 },
+    triggerPercentByTerrain: { beach: 20, forest: 20, river: 20, rock: 20 },
+    nightTriggerPercentByTerrain: { beach: 20, forest: 20, river: 20, rock: 20 },
   },
   nightEncounter: {
     sourceId: 'user-supplied-surface-night-encounter-rules-revised-2026-10-21',
     provenance: 'Direct user-provided revised surface night encounter rule on 2026-10-21; supersedes earlier night-risk rates and ordering.',
     active: true,
-    encounterPercentByTerrain: { beach: 30, forest: 35, river: 35, rock: 30 },
+    encounterPercentByTerrain: { beach: 20, forest: 20, river: 20, rock: 20 },
     enemyWeightByName: { 夜間蝙蝠: 4, 夜狼: 6 },
     damageOnEncounter: 1,
   },
@@ -19,17 +19,17 @@ export const SURFACE_USER_RULE_OVERRIDES = {
     active: true,
     emptyNodeOnly: true,
     occupiedBy: 'other-alive-residents-only',
-    day: { triggerPercent: 15 },
-    night: { triggerPercent: 25 },
+    day: { triggerPercent: 20 },
+    night: { triggerPercent: 20 },
     nightOrdering: 'runs-only-after-new-terrain-night-encounter-roll-misses',
   },
   forestBerries: {
-    sourceId: 'latest-user-forest-berries-override-2026-10-20',
-    provenance: 'Direct user correction relayed by root on 2026-10-20; active gameplay probabilities supersede the historical recovered CSV values.',
+    sourceId: 'user-confirmed-berry-forest-total-20-2026-10-26',
+    provenance: 'User requested the total berry acquisition rate be reduced to about 20% on 2026-10-26; poisonous berries remain 5% of successful berry finds.',
     active: true,
-    historicalSource: 'references/tables/recovered_surface_actions.csv:2-3',
+    historicalSource: 'references/07A_找回的詳細掉落表.md:96',
     historicalProbabilities: { 有益野果: 80, 無收穫: 20 },
-    activeProbabilities: { 有益野果: 80, 無收穫: 20 },
+    activeProbabilities: { 莓果: 19, 無收穫: 80, 毒莓: 1 },
   },
   unsafeSleep: {
     sourceId: 'latest-user-sleep-risk-override-2026-10-20',
@@ -47,10 +47,11 @@ export const SURFACE_USER_RULE_OVERRIDES = {
 
 export type ForestPhase = 'day' | 'night';
 
-export function activeForestBerryPool(): readonly { readonly outcome: '有益野果' | '無收穫'; readonly probabilityPercent: number }[] {
+export function activeForestBerryPool(): readonly { readonly outcome: '莓果' | '無收穫' | '毒莓'; readonly probabilityPercent: number }[] {
   return [
-    { outcome: '有益野果', probabilityPercent: SURFACE_USER_RULE_OVERRIDES.forestBerries.activeProbabilities.有益野果 },
+    { outcome: '莓果', probabilityPercent: SURFACE_USER_RULE_OVERRIDES.forestBerries.activeProbabilities.莓果 },
     { outcome: '無收穫', probabilityPercent: SURFACE_USER_RULE_OVERRIDES.forestBerries.activeProbabilities.無收穫 },
+    { outcome: '毒莓', probabilityPercent: SURFACE_USER_RULE_OVERRIDES.forestBerries.activeProbabilities.毒莓 },
   ];
 }
 

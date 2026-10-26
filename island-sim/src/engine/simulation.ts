@@ -9,7 +9,7 @@ import { nextPersonalUnsafeNightRiskAt } from './night-risk.ts';
 import { locationNameForNode } from '../content/location-names.ts';
 import { isNodeCampfireProtected } from '../domain/campfire-safety.ts';
 import { dayPhaseAt } from './clock.ts';
-import { MAX_RESIDENT_COUNT, startingLocationNodeIds } from './world.ts';
+import { startingLocationNodeIds } from './world.ts';
 import { SeededRandom } from './random.ts';
 import type { AreaRiskEntry } from '../domain/surface.ts';
 import { resolveSurfaceEntry, resolveSurfaceAction, harvestCoconut, advanceCoconutBeachStocks, advanceNightExplorationStreak, isSurfaceAction, type SurfaceAction, type SurfaceTables } from '../domain/surface.ts';
@@ -22,6 +22,8 @@ import { resolveGift, resolvePublicMessage } from '../domain/social.ts';
 import { selectReadableDocument, type ReadableDocumentPool } from '../domain/document-pools.ts';
 import { DUNGEON_ENTRY_CELL_ID, dungeonCellNeighbors, resolveDungeonRuntimeStep } from './dungeon-runtime.ts';
 import { allowsDaySurfaceEntryEvents, environmentTerrainForClassification, hasNodeClassificationBehavior } from '../domain/node-classification.ts';
+import { canonicalInventoryItemId } from '../domain/item-identity.ts';
+import { nextEquipmentUpgrade } from '../domain/equipment-upgrade.ts';
 
 const WAIT_ACTION_COST_T = 1 as const;
 const HERO_UNIQUE_ITEM_IDS = ['勇者劍', '勇者盾', '勇者上甲', '勇者下甲'] as const;
@@ -30,12 +32,40 @@ export type ActionSettlement =
   | { readonly ok: true; readonly state: WorldState; readonly event: WorldEvent; readonly randomDraws: readonly RandomDraw[] }
   | { readonly ok: false; readonly state: WorldState; readonly unresolved: readonly string[] };
 
+function surfaceActionAvailableAtNode(
+  action: SurfaceAction,
+  nodeId: string,
+  state: WorldState,
+  capabilities: ActiveSurfaceCapabilities,
+): boolean {
+  if (!capabilities.nodeIdsByAction[action].includes(nodeId)) return false;
+  const terrain = state.nodes[nodeId]?.surfaceTerrain;
+  if (action === 'fishing') return terrain === 'port';
+  if (action === 'forest-berry-gather') return terrain === 'berry-forest';
+  if (action === 'rock-exploration') return terrain === 'rock';
+  return terrain === 'river';
+}
+
+function recordResidentHpChanges(previous: WorldState, next: WorldState, event: WorldEvent): WorldEvent {
+  const hpChanges = Object.values(previous.actors).flatMap((before) => {
+    const after = next.actors[before.id];
+    if (before.actorType !== 'resident' || before.hitPoints === undefined || after?.hitPoints === undefined) return [];
+    const damage = Math.max(0, before.hitPoints - after.hitPoints);
+    return damage > 0 ? [{ actorId: before.id, damage, remainingHp: after.hitPoints }] : [];
+  });
+  if (hpChanges.length === 0) return event;
+  const basePayload = typeof event.payload === 'object' && event.payload !== null && !Array.isArray(event.payload)
+    ? event.payload : {};
+  return { ...event, payload: { ...basePayload, hpChanges } };
+}
+
 export type ScheduledWorldEvent =
   | { readonly kind: 'resident-action'; readonly timeT: number; readonly actorIds: readonly string[]; readonly randomDraws: readonly RandomDraw[]; readonly rngState: string; readonly unresolved: readonly string[] }
   | { readonly kind: 'monster-action'; readonly timeT: number; readonly monsterId: string; readonly unresolved: readonly string[]; readonly randomDraws?: readonly RandomDraw[]; readonly rngState?: string }
   | { readonly kind: 'travel-arrival'; readonly timeT: number; readonly actorId: string }
   | { readonly kind: 'object-expiry'; readonly timeT: number; readonly objectId: string }
   | { readonly kind: 'day-boundary'; readonly timeT: number }
+  | { readonly kind: 'sleep-recovery'; readonly timeT: number; readonly actorId: string }
   | { readonly kind: 'personal-sleep-risk-unresolved'; readonly timeT: number; readonly actorId: string; readonly unresolved: readonly string[] };
 
 export interface CorpseActionCosts {
@@ -82,6 +112,7 @@ export interface SimulationActionContent {
   readonly attackDistributions?: readonly CsvRow[];
   readonly dungeonEvents?: readonly CsvRow[];
   readonly monsterBonusDrops?: readonly CsvRow[];
+  readonly surfaceMonsterDrops?: readonly CsvRow[];
   readonly readableTexts?: Readonly<Record<string, string>>;
   readonly nodeNotices?: readonly CsvRow[];
   readonly containerCategoryWeights?: readonly CsvRow[];
@@ -118,6 +149,24 @@ export function availableActions(state: WorldState, actorId: string, graph: Isla
   }
   const node = state.nodes[actor.nodeId];
   if (node === undefined) return actions;
+  if (actor.inventory?.includes('普通垃圾') && actionContent?.functionalItems?.some((row) => row.item_id === '普通垃圾' && row.use_effect === 'consume_no_effect')) {
+    actions.push({ id: 'use:普通垃圾', type: 'use-garbage', name: '使用普通垃圾', costT: 1, requiresText: false, payload: { itemId: '普通垃圾' }, payloadSchemaKey: 'inventory-item-id' });
+  }
+  if (actor.inventory?.includes('魔法石') && actor.attack !== undefined && actor.defense !== undefined && actor.hitPoints !== undefined
+    && actionContent?.functionalItems?.some((row) => row.item_id === '魔法石' && row.use_effect === 'upgrade_equipped_one_tier')) {
+    const equippedIds = [...new Set(Object.values(actor.equipment ?? {}).filter((itemId): itemId is string => typeof itemId === 'string'))];
+    const equippedEffectsKnown = equippedIds.every((itemId) => readEquipmentEffect(findEquipment(actionContent, itemId)) !== null);
+    for (const [slot, itemId] of Object.entries(actor.equipment ?? {})) {
+      if (typeof itemId !== 'string' || !equippedEffectsKnown) continue;
+      const effect = readEquipmentEffect(findEquipment(actionContent, itemId));
+      const upgraded = readEquipmentUpgrade(actionContent, itemId);
+      if (effect === null || upgraded === null || !isEquippedInSlot(actor, slot, itemId, effect.slot)) continue;
+      actions.push({
+        id: `upgrade:${slot}:${itemId}`, type: 'upgrade-equipment', name: `使用魔法石將${canonicalInventoryItemId(itemId)}升級為${upgraded.itemId}`,
+        costT: 1, requiresText: false, payload: { slot, fromItemId: itemId, toItemId: upgraded.itemId }, payloadSchemaKey: 'equipped-item-upgrade',
+      });
+    }
+  }
   if (hasNodeClassificationBehavior(node.surfaceTerrain, 'monumentValley') && actor.dungeonLocation == null) {
     actions.push({ id: 'monument-inscribe', type: 'monument-inscribe', name: '在紀念碑谷立碑並留下碑文', costT: 3, requiresText: true, payload: { poolId: 'monument-valley' }, payloadSchemaKey: 'free-text' });
     if ((state.monumentValleyInscriptionPool?.length ?? 0) > 0) {
@@ -172,15 +221,15 @@ export function availableActions(state: WorldState, actorId: string, graph: Isla
     const inventory = actor.inventory ?? [];
     if ((actor.hunger ?? 5) < 5) {
       for (const itemId of inventory) {
-        const food = actionContent.foods.find((row) => row.name === itemId);
+        const food = actionContent.foods.find((row) => row.name === canonicalInventoryItemId(itemId));
         if (food === undefined || food.name === '龍血' || readFoodEffect(food) === null) continue;
-        actions.push({ id: `eat:${itemId}`, type: 'eat', name: `食用${itemId}`, costT: 1, requiresText: false, payload: { itemId }, payloadSchemaKey: 'inventory-item-id' });
+        actions.push({ id: `eat:${itemId}`, type: 'eat', name: `食用${canonicalInventoryItemId(itemId)}`, costT: 1, requiresText: false, payload: { itemId }, payloadSchemaKey: 'inventory-item-id' });
       }
     }
     if (actor.attack !== undefined) {
       for (const itemId of inventory) {
         if (readEquipmentEffect(findEquipment(actionContent, itemId)) !== null) {
-          actions.push({ id: `equip:${itemId}`, type: 'equip', name: `裝備${itemId}`, costT: 1, requiresText: false, payload: { itemId }, payloadSchemaKey: 'inventory-item-id' });
+          actions.push({ id: `equip:${itemId}`, type: 'equip', name: `裝備${canonicalInventoryItemId(itemId)}`, costT: 1, requiresText: false, payload: { itemId }, payloadSchemaKey: 'inventory-item-id' });
         }
       }
     }
@@ -224,19 +273,16 @@ export function availableActions(state: WorldState, actorId: string, graph: Isla
       ['rock-exploration', 'rock-exploration', '岩石探索'],
       ['river-exploration', 'river-exploration', '河流探索'],
     ];
-    const approvedNodes = capabilities.nodeIdsByAction as Readonly<Record<string, readonly string[]>>;
     for (const [capability, surfaceAction, label] of nodeActions) {
-      const availableHere = capability === 'fishing'
-        ? state.nodes[actor.nodeId]?.surfaceTerrain === 'port'
-        : (approvedNodes[capability] ?? []).includes(actor.nodeId);
+      const availableHere = surfaceActionAvailableAtNode(surfaceAction, actor.nodeId, state, capabilities);
       if (availableHere) {
         actions.push({ id: `surface:${surfaceAction}`, type: 'surface', name: label, costT: 3, requiresText: false, payload: { surfaceAction }, payloadSchemaKey: 'surface-action' });
       }
     }
-    if (dayPhaseAt(decisionTimeT) === 'night' && approvedNodes['night-river-dive']?.includes(actor.nodeId)) {
+    if (dayPhaseAt(decisionTimeT) === 'night' && surfaceActionAvailableAtNode('night-river-dive', actor.nodeId, state, capabilities)) {
       actions.push({ id: 'surface:night-river-dive', type: 'surface', name: '夜間河流潛水', costT: 3, requiresText: false, payload: { surfaceAction: 'night-river-dive' }, payloadSchemaKey: 'surface-action' });
     }
-    if (approvedNodes['coconut-harvest']?.includes(actor.nodeId) && (state.surfaceStocks?.byNode[actor.nodeId] ?? 0) > 0) {
+    if (capabilities.nodeIdsByAction['coconut-harvest'].includes(actor.nodeId) && (state.surfaceStocks?.byNode[actor.nodeId] ?? 0) > 0) {
       actions.push({ id: 'harvest-coconut', type: 'harvest-coconut', name: '採集椰子', costT: capabilities.coconut.harvestCostT, requiresText: false, payload: { nodeId: actor.nodeId }, payloadSchemaKey: 'current-node' });
     }
   }
@@ -289,22 +335,22 @@ export function availableActions(state: WorldState, actorId: string, graph: Isla
 function appendReadAndContainerActions(
   actions: ActionDefinition[], state: WorldState, actor: WorldActor, actionContent: SimulationActionContent | undefined, decisionTimeT: number,
 ): void {
-  const readableTexts = actionContent?.readableTexts;
   for (const object of Object.values(state.objects).filter((candidate) => candidate.objectType !== 'corpse'
     && candidate.objectType !== 'container' && candidate.nodeId === actor.nodeId)) {
     const pool = fixedReadablePoolForItem(object.itemId);
-    const hasBoundText = typeof object.readableText === 'string' && object.readableText.trim().length > 0;
-    const hasMappedText = typeof object.readableTextId === 'string' && Boolean(readableTexts?.[object.readableTextId]?.trim());
-    const hasPoolText = pool !== null && readablePoolDocuments(actionContent, pool).length > 0;
+    const hasBoundText = typeof object.readableText === 'string' && object.readableText.trim().length > 0
+      && (object.itemId !== '告示牌' || object.readableTextId == null);
+    const hasMappedText = typeof object.readableTextId === 'string' && Boolean(mappedReadableTextForItem(actionContent, object.itemId, object.readableTextId)?.trim());
+    const hasPoolText = pool !== null && pool !== 'signboard' && readablePoolDocuments(actionContent, pool).length > 0;
     if (!hasBoundText && !hasMappedText && !hasPoolText) continue;
     actions.push({ id: `read:${object.id}`, type: 'read', name: `閱讀${object.itemId ?? '物件'}`, costT: 1, requiresText: false, payload: { objectId: object.id }, payloadSchemaKey: 'world-object-id' });
   }
   for (const item of actor.readableInventoryItems ?? []) {
     if (!(actor.inventory ?? []).includes(item.itemId)) continue;
     const pool = fixedReadablePoolForItem(item.itemId);
-    const hasText = Boolean(item.readableText?.trim())
-      || (typeof item.readableTextId === 'string' && Boolean(readableTexts?.[item.readableTextId]?.trim()))
-      || (pool !== null && readablePoolDocuments(actionContent, pool).length > 0);
+    const hasText = (Boolean(item.readableText?.trim()) && (item.itemId !== '告示牌' || item.readableTextId == null))
+      || (typeof item.readableTextId === 'string' && Boolean(mappedReadableTextForItem(actionContent, item.itemId, item.readableTextId)?.trim()))
+      || (pool !== null && pool !== 'signboard' && readablePoolDocuments(actionContent, pool).length > 0);
     if (!hasText) continue;
     actions.push({ id: `read-inventory:${item.instanceId}`, type: 'read', name: `閱讀背包中的${item.itemId}`, costT: 1, requiresText: false, payload: { readableInstanceId: item.instanceId }, payloadSchemaKey: 'world-object-id' });
   }
@@ -391,7 +437,7 @@ export function orderNextResidents(state: WorldState): {
 export function nextWorldEvent(state: WorldState): ScheduledWorldEvent {
   const residentOrder = orderNextResidents(state);
   const residentTime = residentOrder.actionTimeT;
-  const timers: Array<Extract<ScheduledWorldEvent, { readonly kind: 'travel-arrival' | 'object-expiry' | 'day-boundary' | 'personal-sleep-risk-unresolved' }>> = [];
+  const timers: Array<Extract<ScheduledWorldEvent, { readonly kind: 'travel-arrival' | 'object-expiry' | 'day-boundary' | 'sleep-recovery' | 'personal-sleep-risk-unresolved' }>> = [];
   for (const actor of Object.values(state.actors)) {
     if (actor.alive && actor.travel !== undefined && actor.travel !== null) {
       timers.push({ kind: 'travel-arrival', timeT: actor.travel.arrivesAtT, actorId: actor.id });
@@ -404,6 +450,12 @@ export function nextWorldEvent(state: WorldState): ScheduledWorldEvent {
   const hasSleeperDueToWake = state.worldTimeT % 72 === 0 && Object.values(state.actors).some((actor) =>
     actor.alive && actor.actorType === 'resident' && actor.sleeping && actor.nextActionAtT <= state.worldTimeT);
   timers.push({ kind: 'day-boundary', timeT: hasSleeperDueToWake ? state.worldTimeT : nextDayBoundary });
+  for (const actor of Object.values(state.actors)) {
+    if (actor.alive && actor.actorType === 'resident' && actor.sleeping && actor.sleepingSinceT != null) {
+      const dueAtT = Math.max(state.worldTimeT, actor.sleepingSinceT + ((actor.sleepRecoveryBlocks ?? 0) + 1) * 8);
+      if (dueAtT <= actor.nextActionAtT) timers.push({ kind: 'sleep-recovery', timeT: dueAtT, actorId: actor.id });
+    }
+  }
   for (const actor of Object.values(state.actors)) {
     if (!actor.alive || actor.actorType !== 'resident' || actor.unsafeEntryAtT === null || !actor.sleeping || actor.nodeId === null) continue;
     const node = state.nodes[actor.nodeId];
@@ -654,16 +706,18 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     const itemId = object?.itemId ?? carriedItem?.itemId ?? null;
     const pool = fixedReadablePoolForItem(itemId);
     const mappedText = carriedItem?.readableTextId == null
-      ? (object?.readableTextId == null ? undefined : actionContent?.readableTexts?.[object.readableTextId])
-      : actionContent?.readableTexts?.[carriedItem.readableTextId];
-    let text = typeof carriedItem?.readableText === 'string' && carriedItem.readableText.trim()
-      ? carriedItem.readableText
-      : typeof object?.readableText === 'string' && object.readableText.trim() ? object.readableText : mappedText;
+      ? (object?.readableTextId == null ? undefined : mappedReadableTextForItem(actionContent, itemId, object.readableTextId))
+      : mappedReadableTextForItem(actionContent, itemId, carriedItem.readableTextId);
+    let text = itemId === '告示牌' && (carriedItem?.readableTextId ?? object?.readableTextId) != null
+      ? mappedText
+      : typeof carriedItem?.readableText === 'string' && carriedItem.readableText.trim()
+        ? carriedItem.readableText
+        : typeof object?.readableText === 'string' && object.readableText.trim() ? object.readableText : mappedText;
     let textId = carriedItem?.readableTextId ?? object?.readableTextId ?? null;
     const drawIdentity = carriedItem?.instanceId ?? object?.id ?? null;
     let readRandomDraws: readonly RandomDraw[] = schedule.randomDraws;
     let readRngState = schedule.rngState;
-    if (drawIdentity !== null && (typeof text !== 'string' || !text.trim()) && pool !== null) {
+    if (drawIdentity !== null && (typeof text !== 'string' || !text.trim()) && pool !== null && pool !== 'signboard') {
       const random = new SeededRandom(schedule.rngState);
       const draw = random.next(`readable-document:${pool}:${drawIdentity}`);
       const selected = selectReadableDocument(readablePoolDocuments(actionContent, pool), pool, draw.value);
@@ -687,7 +741,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
       actorId: actor.id, nodeId: actor.nodeId, kind: 'object-read', visibility: 'public',
       payload: { objectId: drawIdentity, itemId, ...(carriedItem === undefined ? {} : { heldByActorId: actor.id }), ...(textId === null ? {} : { documentId: textId }), text }, randomDraws: readRandomDraws,
     };
-    const updatedObjects = validGroundObject && pool !== null
+    const updatedObjects = validGroundObject && pool !== null && pool !== 'signboard'
       ? { ...state.objects, [object!.id]: { ...object!, readableTextId: textId, readableText: text } }
       : state.objects;
     const updatedReadableInventoryItems: readonly ReadableInventoryItem[] | undefined = validCarriedItem
@@ -713,8 +767,8 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
       return { ok: false, state, unresolved: ['Surface action requires the active node crosswalk and complete source action tables.'] };
     }
     if (!isSurfaceAction(surfaceAction)) return { ok: false, state, unresolved: [`Unsupported surface action ${surfaceAction}.`] };
-    if (surfaceAction === 'fishing' && state.nodes[nodeId]?.surfaceTerrain !== 'port') {
-      return { ok: false, state, unresolved: ['釣魚只能在港口進行。'] };
+    if (!surfaceActionAvailableAtNode(surfaceAction, nodeId, state, actionContent.capabilities)) {
+      return { ok: false, state, unresolved: [`${surfaceAction} is not available at Node ${nodeId} in the active map profile.`] };
     }
     const tables: SurfaceTables = {
       fishing: actionContent.fishing, surface: actionContent.surface, recovered: actionContent.recovered,
@@ -736,9 +790,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
       nodeId,
       worldTimeT: schedule.timeT,
       phase: dayPhaseAt(schedule.timeT),
-      actionAvailableAtNode: surfaceAction === 'fishing'
-        ? state.nodes[nodeId]?.surfaceTerrain === 'port'
-        : (actionContent.capabilities.nodeIdsByAction as Readonly<Record<string, readonly string[]>>)[surfaceAction]?.includes(nodeId) ?? false,
+      actionAvailableAtNode: surfaceActionAvailableAtNode(surfaceAction, nodeId, state, actionContent.capabilities),
       randomState: schedule.rngState,
       tables,
       existingUniqueItems,
@@ -840,9 +892,20 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     }, event, randomDraws: schedule.randomDraws };
   }
 
+  if (action.type === 'use-garbage') {
+    const itemId = readString(action.payload, 'itemId');
+    const inventory = actor.inventory ?? [];
+    const itemIndex = inventory.indexOf('普通垃圾');
+    if (itemId !== '普通垃圾' || itemIndex < 0 || !actionContent?.functionalItems?.some((row) => row.item_id === itemId && row.use_effect === 'consume_no_effect')) {
+      return { ok: false, state, unresolved: ['Ordinary garbage is no longer available for use.'] };
+    }
+    const updatedActor = { ...actor, inventory: inventory.filter((_, index) => index !== itemIndex), nextActionAtT: schedule.timeT + action.costT, lastActionId: action.id };
+    return settleActionRecord(state, schedule, actor, updatedActor, action.id, 'item-used', { itemId, effect: 'none', timeCostT: action.costT }, undefined, proposal.intent);
+  }
+
   if (action.type === 'eat') {
     const itemId = readString(action.payload, 'itemId');
-    const food = itemId === null ? undefined : actionContent?.foods.find((row) => row.name === itemId);
+    const food = itemId === null ? undefined : actionContent?.foods.find((row) => row.name === canonicalInventoryItemId(itemId));
     const effect = food === undefined ? null : readFoodEffect(food);
     if (itemId === null || effect === null || itemId === '龍血') return { ok: false, state, unresolved: [`Food item for ${action.id} is not available from the current source catalog.`] };
     const inventory = actor.inventory ?? [];
@@ -1049,13 +1112,61 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     return settleActionRecord(state, schedule, actor, { ...actor, nextActionAtT: schedule.timeT + action.costT, lastActionId: action.id }, action.id, draft.kind, draft.payload, undefined, proposal.intent);
   }
 
+  if (action.type === 'upgrade-equipment') {
+    const slot = readString(action.payload, 'slot');
+    const fromItemId = readString(action.payload, 'fromItemId');
+    const toItemId = readString(action.payload, 'toItemId');
+    const inventory = actor.inventory ?? [];
+    const stoneIndex = inventory.indexOf('魔法石');
+    const equipmentRows = actionContent?.equipment;
+    if (slot === null || fromItemId === null || toItemId === null || stoneIndex < 0 || equipmentRows === undefined
+      || actor.attack === undefined || actor.defense === undefined || actor.hitPoints === undefined) {
+      return { ok: false, state, unresolved: ['魔法石需要一顆在背包中，且居民必須穿戴一件可升級的裝備。'] };
+    }
+    const catalog = { foods: [], equipment: equipmentRows };
+    const sourceEffect = readEquipmentEffect(findEquipment(catalog, fromItemId));
+    const targetEffect = readEquipmentUpgrade(catalog, fromItemId);
+    const oldEquipment = actor.equipment ?? {};
+    if (oldEquipment[slot] !== fromItemId || sourceEffect === null || targetEffect === null
+      || targetEffect.itemId !== toItemId || !isEquippedInSlot(actor, slot, fromItemId, sourceEffect.slot)) {
+      return { ok: false, state, unresolved: ['選取的裝備已改變，或沒有來源確認的同類型下一階裝備。'] };
+    }
+    const oldIds = [...new Set(Object.values(oldEquipment).filter((value): value is string => value !== null))];
+    const oldEffects = oldIds.map((itemId) => readEquipmentEffect(findEquipment(catalog, itemId)));
+    if (oldEffects.some((effect) => effect === null)) {
+      return { ok: false, state, unresolved: ['已穿戴的裝備缺少完整能力資料，無法安全結算升級。'] };
+    }
+    const nextEquipment = { ...oldEquipment, [slot]: toItemId };
+    if (sourceEffect.slot === 'both_hands') nextEquipment['off_hand'] = toItemId;
+    const nextIds = [...new Set(Object.values(nextEquipment).filter((value): value is string => value !== null))];
+    const nextEffects = nextIds.map((itemId) => readEquipmentEffect(findEquipment(catalog, itemId)));
+    if (nextEffects.some((effect) => effect === null)) {
+      return { ok: false, state, unresolved: ['升級後的裝備缺少完整能力資料，無法安全結算升級。'] };
+    }
+    const oldEffectList = oldEffects.filter((effect): effect is EquipmentEffect => effect !== null);
+    const nextEffectList = nextEffects.filter((effect): effect is EquipmentEffect => effect !== null);
+    const baseAttack = actor.attack - oldEffectList.reduce((sum, effect) => sum + effect.attack, 0);
+    const baseDefense = actor.defense - oldEffectList.reduce((sum, effect) => sum + effect.defense, 0);
+    const attack = baseAttack + nextEffectList.reduce((sum, effect) => sum + effect.attack, 0);
+    const defense = baseDefense + nextEffectList.reduce((sum, effect) => sum + effect.defense, 0);
+    const speedModifier = nextEffectList.reduce((sum, effect) => sum + effect.speedModifier, 0);
+    const speed = residentSpeed(actor.hitPoints, speedModifier).speed;
+    const nextInventory = [...inventory.slice(0, stoneIndex), ...inventory.slice(stoneIndex + 1)];
+    const updatedActor = { ...actor, equipment: nextEquipment, inventory: nextInventory, attack, defense, speed, nextActionAtT: schedule.timeT + action.costT, lastActionId: action.id };
+    return settleActionRecord(state, schedule, actor, updatedActor, action.id, 'item-upgraded', {
+      itemId: toItemId, fromItemId: canonicalInventoryItemId(fromItemId), toItemId, slot, consumedItemId: '魔法石',
+      attack, defense, speed, timeCostT: action.costT,
+    }, undefined, proposal.intent);
+  }
+
   if (action.type === 'equip') {
     const itemId = readString(action.payload, 'itemId');
+    const equipmentItemId = itemId === null ? null : canonicalInventoryItemId(itemId);
     const equipmentRows = actionContent?.equipment;
     const itemCatalog = { foods: [], equipment: equipmentRows ?? [] };
     const item = itemId === null ? null : findEquipment(itemCatalog, itemId);
     const effect = readEquipmentEffect(item);
-    if (itemId === null || effect === null) return { ok: false, state, unresolved: [`Equipment item for ${action.id} is not available with complete source combat values.`] };
+    if (itemId === null || equipmentItemId === null || effect === null) return { ok: false, state, unresolved: [`Equipment item for ${action.id} is not available with complete source combat values.`] };
     const inventory = actor.inventory ?? [];
     if (!inventory.includes(itemId)) return { ok: false, state, unresolved: [`Resident ${actorId} no longer carries ${itemId}.`] };
     const oldEquipment = actor.equipment ?? {};
@@ -1068,7 +1179,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
       for (const slot of ['main_hand', 'off_hand']) {
         const existing = nextEquipment[slot];
         if (existing !== null && existing !== undefined) displaced.add(existing);
-        nextEquipment[slot] = itemId;
+        nextEquipment[slot] = equipmentItemId;
       }
     } else {
       const slot = equipmentSlot(effect.slot);
@@ -1082,7 +1193,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
         }
         displaced.add(existing);
       }
-      nextEquipment[slot] = itemId;
+      nextEquipment[slot] = equipmentItemId;
     }
     displaced.delete(itemId);
     const nextInventory = inventory.filter((candidate) => candidate !== itemId).concat([...displaced]);
@@ -1099,7 +1210,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     const speedModifier = nextEffectList.reduce((sum, value) => sum + value.speedModifier, 0);
     const speed = residentSpeed(actor.hitPoints ?? 0, speedModifier).speed;
     const updatedActor = { ...actor, equipment: nextEquipment, inventory: nextInventory, attack, defense, speed, nextActionAtT: schedule.timeT + action.costT, lastActionId: action.id };
-    return settleActionRecord(state, schedule, actor, updatedActor, action.id, 'item-equipped', { itemId, attack, defense, speed, timeCostT: action.costT }, undefined, proposal.intent);
+    return settleActionRecord(state, schedule, actor, updatedActor, action.id, 'item-equipped', { itemId: equipmentItemId, attack, defense, speed, timeCostT: action.costT }, undefined, proposal.intent);
   }
 
   if (action.type === 'attack') {
@@ -1254,6 +1365,30 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     let objects = state.objects;
     let privateLifeData = state.privateLifeData;
     let attackerInventory = actor.inventory ?? [];
+    const surfaceDropRule = target.actorType === 'monster' && target.dungeonLocation == null
+      ? actionContent?.surfaceMonsterDrops?.find((row) => row.monster === target.name)
+      : undefined;
+    if (!struck.alive && surfaceDropRule !== undefined) {
+      const itemId = surfaceDropRule.item_id?.trim();
+      const dropChancePercent = Number(surfaceDropRule.drop_chance_percent);
+      if (!itemId || !Number.isFinite(dropChancePercent) || dropChancePercent < 0 || dropChancePercent > 100) {
+        return { ok: false, state, unresolved: [`Surface monster drop rule for ${target.name ?? target.id} is incomplete or invalid.`] };
+      }
+      const dropDraw = dropChancePercent === 100 ? null : attackRandom.next(`surface-monster-drop.${sequence}.${target.name}`);
+      if (dropDraw !== null) randomDraws.push(dropDraw);
+      if (dropChancePercent === 100 || dropDraw!.value < dropChancePercent / 100) {
+        rewardItemId = itemId;
+        if (attackerInventory.length < 10) {
+          attackerInventory = [...attackerInventory, itemId];
+        } else if (actor.nodeId !== null) {
+          rewardObjectId = `surface-monster-drop-${sequence}-${target.id}`;
+          objects = {
+            ...objects,
+            [rewardObjectId]: { ...createDropObject({ id: rewardObjectId, itemId, nodeId: actor.nodeId, generatedAtT: schedule.timeT }), objectType: 'item' },
+          };
+        }
+      }
+    }
     if (!struck.alive && target.actorType === 'monster' && actionContent?.monsterBonusDrops !== undefined) {
       const sourceDrop = actionContent.monsterBonusDrops.find((row) => row.monster === target.name);
       if (sourceDrop !== undefined) {
@@ -1668,6 +1803,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     nextActionAtT: wakeAtT ?? schedule.timeT + action.costT,
     sleeping,
     sleepingSinceT: sleeping ? schedule.timeT : null,
+    sleepRecoveryBlocks: 0,
     lastActionId: action.id,
   };
   const sequence = state.sequence + 1;
@@ -1862,7 +1998,11 @@ function clearCreaturesFromNodesEmptiedByPlayers(previous: WorldState, next: Wor
 
 export function settleNextAction(state: WorldState, proposal: ActionProposal, graph: IslandGraph, corpseCosts: CorpseActionCosts = CORPSE_ACTION_COSTS, actionContent?: SimulationActionContent): ActionSettlement {
   const result = settleNextActionCore(state, proposal, graph, corpseCosts, actionContent);
-  return result.ok ? { ...result, state: clearCreaturesFromNodesEmptiedByPlayers(state, result.state, result.event.nodeId) } : result;
+  return result.ok ? {
+    ...result,
+    state: clearCreaturesFromNodesEmptiedByPlayers(state, result.state, result.event.nodeId),
+    event: recordResidentHpChanges(state, result.state, result.event),
+  } : result;
 }
 
 /** Ref14 Q11: a malformed model reply consumes one small action and leaves a fixed result for its next prompt. */
@@ -2011,7 +2151,7 @@ function settleNextTimerEventCore(state: WorldState, modelAssignmentsBySlot: Rea
       if (risk.encounter) {
         const hitPoints = Math.max(0, (sleeper.hitPoints ?? 0) - 1);
         const alive = hitPoints > 0;
-        updated = { ...sleeper, hitPoints, alive, sleeping: false, sleepingSinceT: null, ...(alive ? { nextActionAtT: eventToSettle.timeT } : { diedAtT: eventToSettle.timeT, nodeId: null, inventory: [], equipment: {} }) };
+        updated = { ...sleeper, hitPoints, alive, sleeping: false, sleepingSinceT: null, sleepRecoveryBlocks: 0, ...(alive ? { nextActionAtT: eventToSettle.timeT } : { diedAtT: eventToSettle.timeT, nodeId: null, inventory: [], equipment: {} }) };
         if (alive) {
           const selection = selectNightEnemy(rngState, nodeId, sleeper.id, eventToSettle.timeT);
           rngState = selection.rngStateAfter;
@@ -2050,6 +2190,23 @@ function settleNextTimerEventCore(state: WorldState, modelAssignmentsBySlot: Rea
       privateLifeData,
       unresolved: [...(state.unresolved ?? []), ...checks.flatMap(({ unresolved: issues }) => issues.map((detail) => ({ sourceId: 'sleep-risk', detail })))],
     };
+  } else if (eventToSettle.kind === 'sleep-recovery') {
+    const sleeper = state.actors[eventToSettle.actorId];
+    if (sleeper === undefined || !sleeper.alive || !sleeper.sleeping || sleeper.sleepingSinceT == null || sleeper.sleep === undefined) {
+      return { ok: false, state, unresolved: ['Sleep recovery timer has no matching sleeping resident.'] };
+    }
+    const completedBlocks = Math.floor((eventToSettle.timeT - sleeper.sleepingSinceT) / 8);
+    const completedNow = Math.max(0, completedBlocks - (sleeper.sleepRecoveryBlocks ?? 0));
+    if (completedNow === 0) return { ok: false, state, unresolved: ['Sleep recovery timer fired before a complete 8T rest block.'] };
+    const sleep = Math.min(3, sleeper.sleep + completedNow);
+    const recovered = sleep - sleeper.sleep;
+    actorId = sleeper.id;
+    nodeId = sleeper.nodeId;
+    kind = 'resident-sleep-recovered';
+    payload = { completedBlocks, recovered, sleepBefore: sleeper.sleep, sleepAfter: sleep, rule: 'one-sleep-per-eight-consecutive-T-max-three' };
+    nextState = { ...nextState, actors: { ...state.actors, [sleeper.id]: {
+      ...sleeper, sleep, sleepRecoveryBlocks: completedBlocks, sleepRecoveryDay: Math.floor((eventToSettle.timeT - 1) / 72),
+    } } };
   } else if (eventToSettle.kind === 'travel-arrival') {
     const actor = state.actors[eventToSettle.actorId];
     if (actor === undefined || actor.travel === undefined || actor.travel === null) return { ok: false, state, unresolved: ['Travel arrival timer has no matching resident transit state.'] };
@@ -2163,8 +2320,8 @@ function settleNextTimerEventCore(state: WorldState, modelAssignmentsBySlot: Rea
     for (const actor of Object.values(state.actors)) {
       if (!actor.alive || actor.actorType !== 'resident' || actor.hunger === undefined || actor.sleep === undefined || actor.hitPoints === undefined) continue;
       const hunger = Math.max(0, actor.hunger - 1);
-      const completedFullNight = actor.sleeping && actor.sleepingSinceT !== undefined && actor.sleepingSinceT !== null && actor.sleepingSinceT <= eventToSettle.timeT - 24;
-      const sleep = completedFullNight ? 3 : Math.max(0, actor.sleep - 1);
+      const sleep = actor.sleepRecoveryDay === Math.floor((eventToSettle.timeT - 1) / 72)
+        ? actor.sleep ?? 0 : Math.max(0, actor.sleep - 1);
       const hitPoints = Math.max(0, actor.hitPoints - (hunger <= 0 ? 3 : 0) - (sleep <= 0 ? 3 : 0));
       const diedNow = hitPoints === 0;
       const droppedObjectIds: string[] = [];
@@ -2201,14 +2358,14 @@ function settleNextTimerEventCore(state: WorldState, modelAssignmentsBySlot: Rea
         ...actor, hunger, sleep, hitPoints, alive: hitPoints > 0,
         diedAtT: hitPoints > 0 ? actor.diedAtT ?? null : actor.diedAtT ?? eventToSettle.timeT,
         ...(diedNow ? { inventory: [], equipment: {} } : {}),
-        sleeping: false, sleepingSinceT: null, nextActionAtT: eventToSettle.timeT,
+        sleeping: false, sleepingSinceT: null, sleepRecoveryBlocks: 0, nextActionAtT: eventToSettle.timeT,
       };
     }
     const rng = new SeededRandom(state.rngState);
     const born: Array<{ readonly slotId: string; readonly actorId: string; readonly generation: number; readonly nodeId: string }> = [];
     const residentCount = state.residentCount ?? 10;
     const livingResidents = () => Object.values(actors).filter((actor) => actor.actorType === 'resident' && actor.alive).length;
-    for (let slotIndex = 0; slotIndex < MAX_RESIDENT_COUNT && livingResidents() < residentCount; slotIndex += 1) {
+    for (let slotIndex = 0; slotIndex < residentCount && livingResidents() < residentCount; slotIndex += 1) {
       const slotId = String(slotIndex);
       const slotActors = Object.values(actors).filter((actor) => actor.actorType === 'resident' && actor.slotId === slotId);
       if (slotActors.some((actor) => actor.alive)) continue;
@@ -2216,7 +2373,7 @@ function settleNextTimerEventCore(state: WorldState, modelAssignmentsBySlot: Rea
       if (mostRecent !== undefined && mostRecent.diedAtT !== undefined && mostRecent.diedAtT !== null && mostRecent.diedAtT >= eventToSettle.timeT) continue;
       const generation = (mostRecent?.generation ?? 0) + 1;
       const id = `resident-${slotId}.${generation}`;
-      const modelSlotId = slotIndex + 1;
+      const modelSlotId = mostRecent?.modelSlotId ?? slotIndex + 1;
       const modelAssignment = mostRecent?.modelAssignment ?? modelAssignmentsBySlot[modelSlotId] ?? null;
       const draw = rng.next(`resident-generation-${generation}-start:${id}`);
       const startNodeIds = startingLocationNodeIds(Object.values(state.nodes));
@@ -2289,7 +2446,11 @@ function settleNextTimerEventCore(state: WorldState, modelAssignmentsBySlot: Rea
 
 export function settleNextTimerEvent(state: WorldState, modelAssignmentsBySlot: Readonly<Record<number, ModelBinding | null>> = {}, options: SimulationTimerOptions = {}): ActionSettlement {
   const result = settleNextTimerEventCore(state, modelAssignmentsBySlot, options);
-  return result.ok ? { ...result, state: clearCreaturesFromNodesEmptiedByPlayers(state, result.state, result.event.nodeId) } : result;
+  return result.ok ? {
+    ...result,
+    state: clearCreaturesFromNodesEmptiedByPlayers(state, result.state, result.event.nodeId),
+    event: recordResidentHpChanges(state, result.state, result.event),
+  } : result;
 }
 
 export function settleResidentBiography(state: WorldState, actorId: string, text: string): ActionSettlement {
@@ -2436,7 +2597,34 @@ interface EquipmentEffect {
 }
 
 function findEquipment(content: SimulationActionContent, itemId: string): CsvRow | null {
-  return content.equipment.find((row) => row['name_zh'] === itemId) ?? null;
+  return content.equipment.find((row) => row['name_zh'] === canonicalInventoryItemId(itemId)) ?? null;
+}
+
+const EQUIPMENT_UPGRADE_TIER: Readonly<Record<string, number>> = {
+  wood: 1, simple: 1, cloth: 1, basic: 1,
+  iron: 2, chain: 2, mid: 2,
+  knight: 3,
+};
+
+function readEquipmentUpgrade(content: SimulationActionContent, itemId: string): EquipmentEffect | null {
+  const nextItemId = nextEquipmentUpgrade(itemId);
+  if (nextItemId === null) return null;
+  const source = findEquipment(content, itemId);
+  const target = findEquipment(content, nextItemId);
+  const sourceEffect = readEquipmentEffect(source);
+  const targetEffect = readEquipmentEffect(target);
+  if (source === null || target === null || sourceEffect === null || targetEffect === null
+    || source['category'] === undefined || source['category'] !== target['category']
+    || sourceEffect.slot !== targetEffect.slot || target['unique'] !== 'false') return null;
+  const sourceTier = EQUIPMENT_UPGRADE_TIER[source['tier'] ?? ''];
+  const targetTier = EQUIPMENT_UPGRADE_TIER[target['tier'] ?? ''];
+  return sourceTier !== undefined && targetTier === sourceTier + 1 ? targetEffect : null;
+}
+
+function isEquippedInSlot(actor: WorldActor, slot: string, itemId: string, sourceSlot: string): boolean {
+  if (actor.equipment?.[slot] !== itemId) return false;
+  if (sourceSlot === 'both_hands') return slot === 'main_hand' && actor.equipment['off_hand'] === itemId;
+  return equipmentSlot(sourceSlot) === slot;
 }
 
 function isUniqueHeroItem(itemId: string): boolean {
@@ -2496,7 +2684,15 @@ function readWakeTime(payload: JsonValue): number | null {
 function fixedReadablePoolForItem(itemId: string | null): ReadableDocumentPool | null {
   if (itemId === '書籍') return 'book';
   if (itemId === '漂流瓶') return 'drift-bottle';
+  if (itemId === '告示牌') return 'signboard';
   return null;
+}
+
+function mappedReadableTextForItem(
+  actionContent: SimulationActionContent | undefined, itemId: string | null, textId: string,
+): string | undefined {
+  if (itemId === '告示牌' && !actionContent?.readableDocuments?.some((row) => row.document_id === textId && row.pool_type === 'signboard')) return undefined;
+  return actionContent?.readableTexts?.[textId];
 }
 
 function readablePoolDocuments(
@@ -2556,9 +2752,9 @@ function applyActorHit(actor: WorldActor, hitPointsAfter: number, timeT: number,
     hitPoints: hitPointsAfter,
     alive,
     ...(alive && wasHit && actor.actorType === 'resident' && actor.sleeping
-      ? { sleeping: false, sleepingSinceT: null, nextActionAtT: timeT }
+       ? { sleeping: false, sleepingSinceT: null, sleepRecoveryBlocks: 0, nextActionAtT: timeT }
       : {}),
-    ...(!alive ? { sleeping: false, sleepingSinceT: null } : {}),
+    ...(!alive ? { sleeping: false, sleepingSinceT: null, sleepRecoveryBlocks: 0 } : {}),
   };
 }
 
@@ -2574,6 +2770,7 @@ function sameJson(left: JsonValue, right: JsonValue): boolean {
 }
 
 function timerPriority(kind: ScheduledWorldEvent['kind']): number {
+  if (kind === 'sleep-recovery') return -1;
   if (kind === 'travel-arrival') return 0;
   if (kind === 'personal-sleep-risk-unresolved') return 0;
   if (kind === 'object-expiry') return 1;

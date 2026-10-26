@@ -24,7 +24,7 @@ test('source pools retain their own totals; exploration risk is separate from re
   assert.equal(sum(surface.filter((row) => row.location_action === '河流探索'), 'probability_percent'), 100);
   assert.equal(sum(surface.filter((row) => row.location_action === '岩石探索'), 'probability_percent'), 100);
   assert.equal(sum(surface.filter((row) => row.location_action === '岩石探索_夜間'), 'probability_percent'), 65);
-  assert.equal(sum(recovered.filter((row) => row.action === '森林採野莓' && row.status === 'user_confirmed_active_2026-10-22'), 'probability_percent'), 100);
+  assert.equal(sum(recovered.filter((row) => row.action === '森林採野莓' && row.status?.startsWith('user_confirmed_active_')), 'probability_percent'), 100);
   assert.equal(recovered.some((row) => row.status === 'historical_superseded_not_active' && (row.action ?? '').startsWith('岩縫')), true);
 });
 
@@ -34,40 +34,40 @@ test('terrain entry pools total 100 and calculate night real rates after enemy m
     rows.filter((row) => row.terrain === terrain).reduce((total, row) => total + Number(row.probability_percent), 0),
   ]));
   assert.deepEqual(sums, { beach: 100, forest: 100, river: 100, rock: 100 });
-  assert.deepEqual(SURFACE_USER_RULE_OVERRIDES.entry.triggerPercentByTerrain, { beach: 10, forest: 15, river: 15, rock: 20 });
-  assert.deepEqual(Object.fromEntries(Object.entries(SURFACE_USER_RULE_OVERRIDES.entry.nightTriggerPercentByTerrain).map(([terrain, rate]) => [terrain, rate * (1 - SURFACE_USER_RULE_OVERRIDES.nightEncounter.encounterPercentByTerrain[terrain as keyof typeof SURFACE_USER_RULE_OVERRIDES.nightEncounter.encounterPercentByTerrain] / 100)])), { beach: 10.5, forest: 16.25, river: 13, rock: 17.5 });
-  const forest = resolveSurfaceEntry({ terrain: 'forest', phase: 'night', rows, actorId: 'r', nodeId: 'n', worldTimeT: 1, randomState: seedForDraw('surface.entry.trigger.night.forest.n.r.1', (value) => value < 0.25) });
-  assert.equal(forest.triggerPercent, 25);
-  assert.equal(forest.outcome?.outcome, '森林野豬');
-  assert.equal(forest.overallOutcomePercent, 8.125);
+  assert.deepEqual(SURFACE_USER_RULE_OVERRIDES.entry.triggerPercentByTerrain, { beach: 20, forest: 20, river: 20, rock: 20 });
+  assert.deepEqual(Object.fromEntries(Object.entries(SURFACE_USER_RULE_OVERRIDES.entry.nightTriggerPercentByTerrain).map(([terrain, rate]) => [terrain, rate * (1 - SURFACE_USER_RULE_OVERRIDES.nightEncounter.encounterPercentByTerrain[terrain as keyof typeof SURFACE_USER_RULE_OVERRIDES.nightEncounter.encounterPercentByTerrain] / 100)])), { beach: 16, forest: 16, river: 16, rock: 16 });
+  const forest = resolveSurfaceEntry({ terrain: 'forest', phase: 'night', rows, actorId: 'r', nodeId: 'n', worldTimeT: 1, randomState: seedForDraw('surface.entry.trigger.night.forest.n.r.1', (value) => value < 0.20) });
+  assert.equal(forest.triggerPercent, 20);
+  assert.ok(rows.some((row) => row.terrain === 'forest' && row.outcome === forest.outcome?.outcome));
+  assert.equal(forest.overallOutcomePercent, Number(forest.outcome?.probability_percent) * 0.16);
 });
 
-test('forest berry gathering uses the user-confirmed 80/20 pool', async () => {
+test('berry forest gathering caps total berry acquisition at 20% while preserving a 5% poison share', async () => {
   const recovered = await csv('recovered_surface_actions.csv');
-  const raw = recovered.filter((row) => row.action === '森林採野莓' && row.status === 'user_confirmed_active_2026-10-22');
-  assert.deepEqual(raw.map((row) => [row.result_or_hazard, Number(row.probability_percent)]), [['有益野果', 80], ['無收穫', 20]]);
-  assert.deepEqual(activeForestBerryPool().map((row) => [row.outcome, row.probabilityPercent]), [['有益野果', 80], ['無收穫', 20]]);
-  const state = seedForDraw('surface.forest.berries', (value) => value < 0.8);
+  const raw = recovered.filter((row) => row.action === '森林採野莓' && row.status === 'user_confirmed_active_2026-10-26');
+  assert.deepEqual(raw.map((row) => [row.result_or_hazard, Number(row.probability_percent)]), [['莓果', 19], ['無收穫', 80], ['毒莓', 1]]);
+  assert.deepEqual(activeForestBerryPool().map((row) => [row.outcome, row.probabilityPercent]), [['莓果', 19], ['無收穫', 80], ['毒莓', 1]]);
+  const state = seedForDraw('surface.forest.berries', (value) => value < 0.75);
   const result = resolveSurfaceAction({
     action: 'forest-berry-gather', actor: { id: 'r', hitPoints: 10, hunger: 0, sleep: 0, inventory: [] },
     nodeId: 'forest', worldTimeT: 3, phase: 'day', actionAvailableAtNode: true, randomState: state,
     tables: { fishing: [], surface: [], recovered },
   });
-  assert.equal(result.outcome, '有益野果');
+  assert.equal(result.outcome, '莓果');
 });
 
 test('forest entry compatibility resolver uses only the terrain trigger, leaving outcomes to the unified table', () => {
-  assert.deepEqual(forestEntryRates('day'), { triggerPercent: 15, overallNegativePercent: null });
-  assert.deepEqual(forestEntryRates('night'), { triggerPercent: 25, overallNegativePercent: null });
+  assert.deepEqual(forestEntryRates('day'), { triggerPercent: 20, overallNegativePercent: null });
+  assert.deepEqual(forestEntryRates('night'), { triggerPercent: 20, overallNegativePercent: null });
   const base = { actorId: 'r', nodeId: 'forest', worldTimeT: 1, phase: 'night' as const, isForestNode: true, otherActorsAtNode: [] };
-  const state = seedForDraw('forest.entry.trigger.forest.r.1', (value) => value < 0.25);
+  const state = seedForDraw('forest.entry.trigger.forest.r.1', (value) => value < 0.20);
   const result = resolveForestEntryEvent({ ...base, randomState: state });
   assert.equal(result.category, 'triggered');
   assert.equal(result.selectedOutcome, null);
   assert.equal(result.randomDraws.length, 1);
   assert.equal(result.event?.payload.overallNegativePercent, null);
   assert.deepEqual(result.unresolved, []);
-  const triggerMissState = seedForDraw('forest.entry.trigger.forest.r.1', (value) => value >= 0.25);
+  const triggerMissState = seedForDraw('forest.entry.trigger.forest.r.1', (value) => value >= 0.20);
   const miss = resolveForestEntryEvent({ ...base, randomState: triggerMissState });
   assert.equal(miss.category, 'no-trigger');
   assert.equal(miss.randomDraws.length, 1);
@@ -86,12 +86,12 @@ test('occupied forest entry excludes self, blocks only on another living residen
   assert.ok(selfAndAnimal.randomDraws.length >= 1);
 });
 
-test('night encounter rates are terrain-specific and supersede the old 17.5% sleep normalization', () => {
+test('night encounter rates are 20% for each terrain', () => {
   const rates = SURFACE_USER_RULE_OVERRIDES.nightEncounter.encounterPercentByTerrain;
-  assert.deepEqual(rates, { beach: 30, forest: 35, river: 35, rock: 30 });
+  assert.deepEqual(rates, { beach: 20, forest: 20, river: 20, rock: 20 });
   assert.equal(SURFACE_USER_RULE_OVERRIDES.unsafeSleep.damageOnEncounter, 1);
   for (const [visualType, terrain, probabilityPercent] of [
-    ['beach', 'beach', 30], ['forest', 'forest', 35], ['river', 'river', 35], ['rock', 'rock', 30],
+    ['beach', 'beach', 20], ['forest', 'forest', 20], ['river', 'river', 20], ['rock', 'rock', 20],
   ] as const) {
     const node = { id: terrain, visualType, surfaceTerrain: terrain, label: null, labelStatus: 'confirmed', neighbors: [], safe: false };
     const seed = seedForDraw(`surface.night-encounter.${terrain}.${terrain}.r.55`, (value) => value < probabilityPercent / 100);
@@ -143,8 +143,8 @@ test('night enemy selection uses the user-specified 4:6 weights only after an en
 test('production island terrain rows use the active night rates and enemy weights without injected tables', async () => {
   const graph = await loadIslandGraph(new URL('../../references/tables/', import.meta.url));
   const productionNodes = [
-    { id: '11', terrain: 'forest', probabilityPercent: 35 },
-    { id: '25', terrain: 'forest', probabilityPercent: 35 },
+    { id: '11', terrain: 'forest', probabilityPercent: 20 },
+    { id: '25', terrain: 'forest', probabilityPercent: 20 },
   ] as const;
 
   for (const expected of productionNodes) {

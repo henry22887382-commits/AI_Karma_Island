@@ -13,11 +13,11 @@ test('user-selected surface candidate map stays runtime-disabled until reference
   assert.equal(pending.status, 'user-selected-candidate-pending-direct-image-verification');
   assert.equal('runtimeEnabled' in history, false);
   assert.equal(history.status, 'review-only-not-approved');
-  assert.deepEqual(pending.candidateActionNodeIds.fishing, ['2', '10', '14']);
+  assert.deepEqual(pending.candidateActionNodeIds.fishing, ['15']);
   assert.deepEqual(pending.candidateActionNodeIds['coconut-harvest'], ['1', '8', '13']);
   assert.deepEqual(pending.candidateActionNodeIds['forest-berry-gather'], ['9', '17', '23']);
-  assert.deepEqual(pending.candidateActionNodeIds['rock-exploration'], ['6', '19', '22']);
-  assert.deepEqual(pending.candidateActionNodeIds['river-exploration'], ['24']);
+  assert.deepEqual(pending.candidateActionNodeIds['rock-exploration'], ['6', '19', '20', '22']);
+  assert.deepEqual(pending.candidateActionNodeIds['river-exploration'], ['5', '24', '26']);
   assert.match(pending.provenance.boundary, /do not use these interaction assignments at runtime/);
 });
 
@@ -36,10 +36,35 @@ test('active crosswalk separates source-group-derived actions from user-adopted 
   const active = createActiveSurfaceCapabilities(nodes);
   assert.equal(active.runtimeEnabled, true);
   assert.deepEqual(active.nodeIdsByAction['forest-berry-gather'], ['9', '17', '23']);
-  assert.deepEqual(active.nodeIdsByAction['rock-exploration'], ['6', '19', '22']);
-  assert.deepEqual(active.nodeIdsByAction['river-exploration'], ['24']);
-  assert.deepEqual(active.nodeIdsByAction.fishing, ['2', '10', '14']);
-  assert.equal(active.provenanceByAction['forest-berry-gather'], 'source-group-derived-and-user-adopted');
+  assert.deepEqual(active.nodeIdsByAction['rock-exploration'], ['6', '19', '20', '22']);
+  assert.deepEqual(active.nodeIdsByAction['river-exploration'], ['5', '24', '26']);
+  assert.deepEqual(active.nodeIdsByAction.fishing, ['15']);
+  assert.equal(active.provenanceByAction['forest-berry-gather'], 'user-confirmed-terrain-classification');
   assert.equal(active.provenanceByAction.fishing, 'user-adopted-supplemental');
   assert.equal(active.provenanceByAction['coconut-harvest'], 'user-adopted-supplemental');
+});
+
+test('active forest boar capability accepts the approved berry-forest Node 23', async () => {
+  const nodes = parseCsv(await readFile(new URL('../../references/tables/island_nodes.csv', import.meta.url), 'utf8'));
+  const active = createActiveSurfaceCapabilities(nodes);
+  assert.deepEqual(active.nodeIdsByAction['forest-boar-area'], ['3', '9', '11', '17', '18', '23', '25', '28']);
+});
+
+test('pending and active capability mappings share terrain-derived candidates on the uniform map', async () => {
+  const sourceNodes = parseCsv(await readFile(new URL('../../references/tables/island_nodes.csv', import.meta.url), 'utf8'));
+  const uniformMap = sourceNodes.map((node) => ({
+    ...node,
+    surface_terrain: ['18', '22'].includes(node.node_id ?? '') ? 'berry-forest'
+      : ['9', '11', '17'].includes(node.node_id ?? '') ? 'forest'
+        : ['3', '10'].includes(node.node_id ?? '') ? 'port'
+          : node.node_id === '23' ? 'rock' : node.surface_terrain ?? '',
+  }));
+  const pending = createSurfaceCapabilitiesPendingImageVerification(uniformMap);
+  const active = createActiveSurfaceCapabilities(uniformMap);
+  assert.deepEqual(pending.candidateActionNodeIds, active.nodeIdsByAction);
+  assert.deepEqual(pending.candidateActionNodeIds['forest-berry-gather'], ['18', '22']);
+  assert.deepEqual(pending.candidateActionNodeIds['rock-exploration'], ['6', '19', '20', '23']);
+  assert.deepEqual(pending.candidateActionNodeIds['river-exploration'], ['5', '24', '26']);
+  assert.deepEqual(pending.candidateActionNodeIds['forest-boar-area'], ['9', '11', '17', '18', '22', '25', '28']);
+  assert.ok(!pending.candidateActionNodeIds['rock-exploration'].includes('21'));
 });

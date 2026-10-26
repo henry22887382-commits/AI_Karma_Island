@@ -22,6 +22,32 @@ test('creates ten residents at seeded non-adjacent source beach choices and reco
   assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
 });
 
+test('starts a new game when map Node 23 is rock', async () => {
+  const sourceGraph = await loadIslandGraph(sourceTables);
+  const graph = {
+    ...sourceGraph,
+    nodes: sourceGraph.nodes.map((node) => node.id === '23' ? { ...node, surfaceTerrain: 'rock' as const } : node),
+  };
+
+  assert.doesNotThrow(() => createInitialWorld(graph, { seed: 'rock-node-23', contentVersion: 'test-source' }));
+});
+
+test('starts a new game on the uniform map terrain matrix', async () => {
+  const sourceGraph = await loadIslandGraph(sourceTables);
+  const graph = {
+    ...sourceGraph,
+    nodes: sourceGraph.nodes.map((node) => ({
+      ...node,
+      surfaceTerrain: ['18', '22'].includes(node.id) ? 'berry-forest' as const
+        : ['9', '11', '17'].includes(node.id) ? 'forest' as const
+          : node.id === '3' ? 'port' as const
+            : node.id === '23' ? 'rock' as const : node.surfaceTerrain,
+    })),
+  };
+
+  assert.doesNotThrow(() => createInitialWorld(graph, { seed: 'uniform-map-terrain', contentVersion: 'test-source' }));
+});
+
 test('selected starting beach IDs are beach nodes with no direct edges between them', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const beaches = new Map(graph.nodes.map((node) => [node.id, node.visualType]));

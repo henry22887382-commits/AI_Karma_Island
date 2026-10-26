@@ -7,3 +7,5 @@ The event timeline now supports an independent all-visible-events or selected-re
 This repository preserves the current project files and execution evidence for handoff. Follow the handoff links to the source index and Cookie records.
 
 The implementation is a work in progress. The handoff records the state and verification known when it was written; this bounded event-timeline update does not claim that unrelated typecheck or test failures are resolved.
+
+維護者部署指南：[island-sim/DEPLOYMENT.md](island-sim/DEPLOYMENT.md)

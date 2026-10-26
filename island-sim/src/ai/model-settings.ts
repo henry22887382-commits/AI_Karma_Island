@@ -43,7 +43,7 @@ export class ModelSettingsStore {
     this.database.exec(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS model_slots (
-        slot_id INTEGER PRIMARY KEY CHECK (slot_id BETWEEN 1 AND 10),
+        slot_id INTEGER PRIMARY KEY CHECK (slot_id >= 1),
         provider TEXT,
         base_url TEXT,
         model TEXT,
@@ -70,6 +70,34 @@ export class ModelSettingsStore {
     if (!columns.has('model_size_b')) this.database.exec('ALTER TABLE model_slots ADD COLUMN model_size_b REAL;');
     if (!columns.has('size_at_least_8b_confirmed')) this.database.exec('ALTER TABLE model_slots ADD COLUMN size_at_least_8b_confirmed INTEGER NOT NULL DEFAULT 0;');
     if (!columns.has('style_description')) this.database.exec('ALTER TABLE model_slots ADD COLUMN style_description TEXT;');
+    const slotTable = this.database.prepare("SELECT sql FROM sqlite_schema WHERE type='table' AND name='model_slots'").get() as { sql: string };
+    if (/slot_id\s+BETWEEN\s+1\s+AND\s+10/i.test(slotTable.sql)) {
+      this.database.exec('BEGIN IMMEDIATE;');
+      try {
+        this.database.exec(`
+        CREATE TABLE model_slots_new (
+          slot_id INTEGER PRIMARY KEY CHECK (slot_id >= 1),
+          provider TEXT, base_url TEXT, model TEXT,
+          fallback_models_json TEXT NOT NULL CHECK (json_valid(fallback_models_json)),
+          input_usd_per_million REAL, output_usd_per_million REAL,
+          max_input_tokens INTEGER, max_context_characters INTEGER NOT NULL DEFAULT 8000,
+          max_output_tokens INTEGER, model_size_b REAL,
+          size_at_least_8b_confirmed INTEGER NOT NULL DEFAULT 0,
+          style_description TEXT, updated_at TEXT, credential_ref TEXT
+        ) STRICT;
+        INSERT INTO model_slots_new SELECT slot_id,provider,base_url,model,fallback_models_json,
+          input_usd_per_million,output_usd_per_million,max_input_tokens,max_context_characters,
+          max_output_tokens,model_size_b,size_at_least_8b_confirmed,style_description,updated_at,credential_ref
+          FROM model_slots;
+        DROP TABLE model_slots;
+        ALTER TABLE model_slots_new RENAME TO model_slots;
+        `);
+        this.database.exec('COMMIT;');
+      } catch (error) {
+        this.database.exec('ROLLBACK;');
+        throw error;
+      }
+    }
     const insert = this.database.prepare('INSERT OR IGNORE INTO model_slots(slot_id, fallback_models_json) VALUES (?, ?)');
     for (let slotId = 1; slotId <= 10; slotId += 1) insert.run(slotId, '[]');
     const rows = this.database.prepare('SELECT slot_id FROM model_slots WHERE credential_ref IS NULL OR credential_ref = ?').all('') as unknown as readonly { readonly slot_id: number }[];
@@ -154,6 +182,14 @@ export class ModelSettingsStore {
     }));
   }
 
+  createSlot(): ModelSlotConfig {
+    const nextSlotId = (this.database.prepare('SELECT MAX(slot_id) AS maximum FROM model_slots').get() as { maximum: number | null }).maximum ?? 0;
+    if (!Number.isSafeInteger(nextSlotId) || nextSlotId >= Number.MAX_SAFE_INTEGER) throw new RangeError('模型卡編號已達可安全表示的範圍。');
+    const slotId = nextSlotId + 1;
+    this.database.prepare('INSERT INTO model_slots(slot_id, fallback_models_json, credential_ref) VALUES (?, ?, ?)').run(slotId, '[]', randomUUID());
+    return this.readSlots().find((slot) => slot.slotId === slotId)!;
+  }
+
   saveSlot(input: ModelSlotInput, updatedAt = new Date().toISOString()): ModelSlotConfig {
     validateSlot(input);
     const previous = this.readSlots().find(({ slotId }) => slotId === input.slotId);
@@ -222,7 +258,7 @@ export function isModelSlotReady(config: ModelSlotConfig, secretConfigured: bool
 }
 
 function validateSlot(input: ModelSlotInput): void {
-  if (!Number.isInteger(input.slotId) || input.slotId < 1 || input.slotId > 10) throw new RangeError('模型槽位必須為 1–10。');
+  if (!Number.isSafeInteger(input.slotId) || input.slotId < 1) throw new RangeError('模型槽位必須是正整數。');
   const strings = [input.provider, input.baseUrl, input.model, ...input.fallbackModels];
   if (strings.some((value) => value !== null && value.length > 500)) throw new RangeError('設定文字欄位過長。');
   if (input.baseUrl !== null) {

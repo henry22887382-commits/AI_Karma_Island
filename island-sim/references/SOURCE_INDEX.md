@@ -16,5 +16,6 @@ The archive remains the immutable original source. Local source copies preserve 
 
 - `tables/container_item_identities.csv` preserves 27 original container-pool labels and assigns exactly one stable inventory ID to each of the 46 pool rows, per the user's 2026-10-22 approval.
 - `tables/functional_items.csv` defines functional-item identity only. Blank text/effect fields remain unconfigured unless a user supplies them.
-- `tables/readable_document_pools.csv` keeps the book and future drift-bottle pools separate; the bottle pool is reserved and has no current gameplay.
-- `tables/readable_documents.csv` contains 101 empty book text slots only. Text is user-supplied later; no production prose is authored here.
+- `tables/readable_document_pools.csv` defines separate book, drift-bottle, monument-valley, and signboard text pools; the bottle pool is reserved for future use.
+- `tables/readable_documents.csv` stores text cards with their pool IDs, including the existing user-authored Node signboard text in the signboard pool. Empty book slots remain distinct from signboard content.
+- `tables/surface_monster_drops.csv` defines guaranteed meat drops for surface bats, crabs, wolves, boar, goats, and the river bear; dungeon bonus drops remain separate.

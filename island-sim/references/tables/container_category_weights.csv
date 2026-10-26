@@ -1,8 +1,8 @@
 source,floor,category,category_percent,status
-地表漂流木箱,地表,食物,60,user_confirmed_one_item_per_item_container
-地表漂流木箱,地表,武器,20,user_confirmed_one_item_per_item_container
-地表漂流木箱,地表,防具,15,user_confirmed_one_item_per_item_container
-地表漂流木箱,地表,功能道具,5,user_confirmed_one_item_per_item_container
+地表漂流木箱,地表,食物,46.1538461538,user_confirmed_one_item_per_item_container
+地表漂流木箱,地表,武器,28.5714285714,user_confirmed_one_item_per_item_container
+地表漂流木箱,地表,防具,21.4285714286,user_confirmed_one_item_per_item_container
+地表漂流木箱,地表,功能道具,3.8461538462,user_confirmed_one_item_per_item_container
 第一層遺失背包,1,食物,65,user_confirmed_one_item_per_item_container
 第一層遺失背包,1,武器,35,user_confirmed_one_item_per_item_container
 第一層遺失背包,1,防具,0,user_confirmed_one_item_per_item_container

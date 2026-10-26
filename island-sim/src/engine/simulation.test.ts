@@ -20,6 +20,43 @@ import { buildAiInput, formatAiNarrativeEvent } from '../ai/view.ts';
 
 const sourceTables = new URL('../../references/tables/', import.meta.url);
 
+test('new games settle one coconut per approved beach immediately and make harvesting available', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const content = await loadSimulationActionContent(sourceTables);
+  const initial = createInitialWorld(graph, { seed: 'coconut-opening-stock', contentVersion: 'archive-01669CAC' });
+  assert.deepEqual(initial.surfaceStocks, {
+    schemaVersion: 1,
+    byNode: { '1': 1, '8': 1, '13': 1 },
+    advancedThroughDay: 0,
+  });
+
+  for (const nodeId of ['1', '8', '13']) {
+    const resident = initial.actors['resident-01']!;
+    const state = {
+      ...initial,
+      actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
+        ...actor, nodeId: actor.id === resident.id ? nodeId : null, nextActionAtT: actor.id === resident.id ? 0 : 100,
+      }])) as typeof initial.actors,
+    };
+    assert.ok(availableActions(state, resident.id, graph, undefined, content).some(({ id }) => id === 'harvest-coconut'), `Node ${nodeId}`);
+  }
+
+  const resident = initial.actors['resident-01']!;
+  const state = {
+    ...initial,
+    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
+      ...actor, nodeId: actor.id === resident.id ? '1' : null, nextActionAtT: actor.id === resident.id ? 0 : 100,
+    }])) as typeof initial.actors,
+  };
+  const harvest = availableActions(state, resident.id, graph, undefined, content).find(({ id }) => id === 'harvest-coconut');
+  assert.ok(harvest);
+  const result = settleNextAction(state, { actorId: resident.id, actionId: harvest.id, timeCostT: harvest.costT, payload: harvest.payload }, graph, undefined, content);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.state.surfaceStocks?.byNode['1'], 0);
+  assert.ok(result.state.actors[resident.id]?.inventory?.includes('椰子'));
+});
+
 test('read action exposes mapped text only after same-Node settlement', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const initial = createInitialWorld(graph, { seed: 'read-action', contentVersion: 'archive-01669CAC' });
@@ -152,6 +189,44 @@ test('offers and atomically settles eating from a source food row', async () => 
   assert.deepEqual(result.state.actors[actorId]?.inventory, []);
   assert.equal(result.event.kind, 'resident-ate');
   assert.equal((result.event.payload as { itemId: string }).itemId, '普通魚');
+});
+
+test('records the actual HP loss from eating poisonous berries on the settlement event', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const initial = createInitialWorld(graph, { seed: 'poison-berry-health-loss', contentVersion: 'archive-01669CAC' });
+  const actorId = 'resident-01';
+  const state = {
+    ...initial,
+    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
+      ...actor, nextActionAtT: actor.id === actorId ? 0 : 100,
+      ...(actor.id === actorId ? { hitPoints: 4, hunger: 2, inventory: ['毒莓'] } : {}),
+    }])) as typeof initial.actors,
+  };
+  const content = { foods: [{ name: '毒莓', fullness_change: '-1', hp_change: '-1', sleep_change: '0' }], equipment: [] };
+  const eat = availableActions(state, actorId, graph, undefined, content).find(({ type }) => type === 'eat');
+  assert.ok(eat);
+  const result = settleNextAction(state, { actorId, actionId: eat.id, timeCostT: eat.costT, payload: eat.payload }, graph, undefined, content);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.state.actors[actorId]?.hitPoints, 3);
+  assert.deepEqual((result.event.payload as { hpChanges?: unknown }).hpChanges, [{ actorId, damage: 1, remainingHp: 3 }]);
+});
+
+test('records the actual HP loss for all residents affected by daily survival settlement', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const initial = createInitialWorld(graph, { seed: 'daily-health-loss-event', contentVersion: 'archive-01669CAC' });
+  const actorId = 'resident-01';
+  const state = {
+    ...initial,
+    worldTimeT: 71,
+    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, actor.id === actorId
+      ? { ...actor, hitPoints: 5, hunger: 1, sleep: 2, nextActionAtT: 90 }
+      : { ...actor, hunger: 5, sleep: 3, nextActionAtT: 90 }])) as typeof initial.actors,
+  };
+  const result = settleNextTimerEvent(state);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual((result.event.payload as { hpChanges?: unknown }).hpChanges, [{ actorId, damage: 3, remainingHp: 2 }]);
 });
 
 test('dungeon entry and cell moves persist runtime, cell position, event draws, and created objects with each action', async () => {
@@ -1367,6 +1442,55 @@ test('delivers a source-row monster drop to the last hitter when an inventory sl
   assert.equal(Object.values(result.state.objects).some(({ itemId }) => itemId === item), false);
 });
 
+test('surface small creatures drop shredded meat; large surface animals drop meat', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const content = await loadSimulationActionContent(sourceTables);
+  const drops = [
+    ['夜間蝙蝠', '碎肉'], ['沙灘螃蟹', '碎肉'], ['電鰻', '碎肉'],
+    ['夜狼', '肉'], ['森林野豬', '肉'], ['山羊', '肉'], ['河流夜熊', '肉'],
+  ] as const;
+  for (const [monsterName, expectedItem] of drops) {
+    const initial = createInitialWorld(graph, { seed: `surface-loot-${monsterName}`, contentVersion: 'archive-01669CAC' });
+    const residentId = 'resident-01';
+    const nodeId = initial.actors[residentId]?.nodeId;
+    assert.ok(nodeId);
+    const targetId = `surface-loot-target-${monsterName}`;
+    const state = {
+      ...initial,
+      actors: {
+        ...Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, { ...actor, nextActionAtT: actor.id === residentId ? 0 : 100 }])),
+        [residentId]: { ...initial.actors[residentId]!, nodeId, nextActionAtT: 0, attack: 5, inventory: [] },
+        [targetId]: { id: targetId, actorType: 'monster' as const, alive: true, nodeId, nextActionAtT: 100, speed: 1, unsafeEntryAtT: 0, sleeping: false, hitPoints: 1, defense: 0, attack: 0, name: monsterName },
+      } as typeof initial.actors,
+    };
+    const attack = availableActions(state, residentId, graph).find(({ id }) => id === `attack:${targetId}`);
+    assert.ok(attack, `${monsterName} should be attackable`);
+    const result = settleNextAction(state, { actorId: residentId, actionId: attack.id, timeCostT: attack.costT, payload: attack.payload }, graph, undefined, content);
+    assert.equal(result.ok, true, monsterName);
+    if (!result.ok) continue;
+    assert.equal((result.event.payload as { rewardItemId?: string }).rewardItemId, expectedItem, monsterName);
+    assert.ok(result.state.actors[residentId]?.inventory?.includes(expectedItem), monsterName);
+    assert.ok(content.foods.some((food) => food.name === expectedItem), `${expectedItem} should be defined as food`);
+    if (monsterName === '夜間蝙蝠') {
+      const fullState = {
+        ...state,
+        actors: { ...state.actors, [residentId]: { ...state.actors[residentId]!, inventory: Array.from({ length: 10 }, (_, index) => `item-${index}`) } },
+      };
+      const fullAttack = availableActions(fullState, residentId, graph).find(({ id }) => id === `attack:${targetId}`);
+      assert.ok(fullAttack);
+      const fullResult = settleNextAction(fullState, { actorId: residentId, actionId: fullAttack.id, timeCostT: fullAttack.costT, payload: fullAttack.payload }, graph, undefined, content);
+      assert.equal(fullResult.ok, true);
+      if (!fullResult.ok) continue;
+      const fullPayload = fullResult.event.payload as { rewardItemId?: string; rewardObjectId?: string };
+      assert.equal(fullPayload.rewardItemId, '碎肉');
+      const groundDrop = fullResult.state.objects[fullPayload.rewardObjectId ?? ''];
+      assert.equal(groundDrop?.itemId, '碎肉');
+      assert.equal(groundDrop?.expiresAtT, fullResult.event.worldTimeT + 72);
+    }
+  }
+  assert.equal(content.foods.some((food) => food.name === '小肉'), false);
+});
+
 test('resolves lethal lava-slime reflection in the same resident attack settlement', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const content = await loadSimulationActionContent(sourceTables);
@@ -2179,7 +2303,9 @@ test('night movement checks terrain first, then selects and schedules one weight
   assert.equal(afterMonster.state.actors[actorId]?.hitPoints, advancedRound.state.actors[actorId]?.hitPoints! - hitResult.appliedDamage);
   assert.equal(afterMonster.event.actorId, encounter.spawnedMonsterId);
 
-  const missSeed = '00002000';
+  const missSeed = Array.from({ length: 500 }, (_, index) => (index + 1).toString(16).padStart(8, '0'))
+    .find((candidate) => !resolveNightEncounterCheck({ node: initial.nodes[targetNodeId], actorId, worldTimeT: 51, randomState: candidate }).encounter);
+  assert.ok(missSeed);
   assert.equal(resolveNightEncounterCheck({ node: initial.nodes[targetNodeId], actorId, worldTimeT: 51, randomState: missSeed }).encounter, false);
   const missState = {
     ...base, rngState: missSeed,

@@ -53,13 +53,13 @@ export class DeathSummaryService {
         if (actor.actorType !== 'resident' || actor.alive) continue;
         const summaryId = this.settings.deathSummaryIdForIdentity(sessionId, sourceSaveId, loadInstanceId, actor.id) ?? deathSummaryId(sessionId, loadInstanceId, actor.id);
         this.settings.ensureDeathSummary(summaryId, sessionId, sourceSaveId, loadInstanceId, actor.id, actor.name ?? actor.id);
-        if (!provider || !this.settings.startDeathSummary(summaryId, sessionId, sourceSaveId, loadInstanceId, actor.id)) continue;
+        if (!config || !provider || !this.settings.startDeathSummary(summaryId, sessionId, sourceSaveId, loadInstanceId, actor.id)) continue;
         try {
           const history: WorldEvent[] = [];
           let cursor = 0;
           for (;;) {
             const page = this.store.readEvents(cursor, 5000);
-            history.push(...page.filter((event) => event.kind !== 'biography' && event.visibility !== 'player-only' && isEventAboutResident(event, actor.id)));
+            history.push(...page.filter((event) => event.kind !== 'biography' && event.visibility !== 'player-only' && isEventAboutResident(event, actor.id, snapshot)));
             const last = page.at(-1);
             if (!last || page.length < 5000) break;
             cursor = last.sequence;
@@ -217,10 +217,12 @@ function arrayHasParticipant(value: unknown, residentId: string, fields: readonl
 function arrayHasNestedParticipant(value: unknown, residentId: string): boolean {
   if (!Array.isArray(value)) return false;
   return value.some((entry) => {
-    if (!isRecord(entry) || !isRecord(entry.payload)) return false;
+    if (!isRecord(entry)) return false;
+    const payload = entry.payload;
+    if (!isRecord(payload)) return false;
     const fields = ['actorId', 'residentId', 'targetActorId', 'targetId', 'recipientId', 'receiverId', 'authorActorId', 'attackerId'];
-    return fields.some((field) => entry.payload[field] === residentId)
-      || (Array.isArray(entry.payload.participants) && entry.payload.participants.some((participant) => {
+    return fields.some((field) => payload[field] === residentId)
+      || (Array.isArray(payload.participants) && payload.participants.some((participant) => {
         if (typeof participant === 'string') return participant === residentId;
         if (!isRecord(participant)) return false;
         return ['id', 'actorId', 'residentId'].some((field) => participant[field] === residentId);

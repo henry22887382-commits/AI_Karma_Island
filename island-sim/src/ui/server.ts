@@ -6,7 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SQLiteWorldStore } from '../persistence/sqlite-store.ts';
 import { islandGraphFromProfile, loadIslandGraph } from '../content/island.ts';
-import { loadSimulationActionContent } from '../content/actions.ts';
+import { actionContentForMapGraph, loadSimulationActionContent } from '../content/actions.ts';
 import { createInitialWorld, syncWorldNodeMetadataFromGraph, syncWorldNodeNotices } from '../engine/world.ts';
 import { SimulationRunner } from '../ai/simulation-runner.ts';
 import { DeathSummaryService } from '../ai/death-summary.ts';
@@ -89,6 +89,7 @@ let setupRefreshPending = false;
 let pendingSetupAssignments = 0;
 let backgroundRefreshPending = false;
 let intentRefreshInFlight = false;
+let lifecycleBusy = false;
 let refreshSequence = 0;
 let historyPageAnchor = null;
 function syncObserverUrl() {
@@ -522,6 +523,7 @@ function showControlFeedback(message) {
   feedback.hidden = !message;
 }
 async function refresh(options = {}) {
+  if (options.background && lifecycleBusy) return;
   if (options.background && hasFocusedEditingControl()) {
     backgroundRefreshPending = true;
     return;
@@ -576,7 +578,7 @@ function selectedResidentForIntentRefresh() {
   return residentId || root.querySelector('.resident-chip.is-selected[data-resident-id]')?.dataset.residentId || '';
 }
 async function refreshSelectedResidentIntents() {
-  if (document.hidden || activeTab !== 'residents' || intentRefreshInFlight) return;
+  if (document.hidden || lifecycleBusy || activeTab !== 'residents' || intentRefreshInFlight) return;
   const id = selectedResidentForIntentRefresh();
   if (!id || !root.querySelector('.observer-intent')) return;
   intentRefreshInFlight = true;
@@ -695,6 +697,22 @@ root.addEventListener('click', async (event) => {
   } finally { button.disabled = false; }
 });
 root.addEventListener('click', async (event) => {
+  const addModelSlotButton = event.target.closest('[data-create-model-slot]');
+  if (addModelSlotButton) {
+    addModelSlotButton.disabled = true;
+    try {
+      const response = await fetch('/api/settings/slot/create', { method: 'POST' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '無法新增模型卡。');
+      captureDrafts();
+      activeModelSlot = result.slotId;
+      await refresh();
+    } catch (error) {
+      const status = root.querySelector('.model-settings-panel > .settings-status');
+      if (status) status.textContent = error instanceof Error ? error.message : '無法新增模型卡。';
+    } finally { if (addModelSlotButton.isConnected) addModelSlotButton.disabled = false; }
+    return;
+  }
   const setupModelSettingsButton = event.target.closest('[data-setup-open-model-settings]');
   if (setupModelSettingsButton) {
     const heading = root.querySelector('#model-settings-title');
@@ -744,6 +762,8 @@ root.addEventListener('click', async (event) => {
   const target = event.target.closest('[data-node-id], [data-dungeon-cell], [data-resident-id], [data-control], [data-lifecycle]');
   if (!target) return;
   if (target.dataset.lifecycle) {
+    if (lifecycleBusy) return;
+    lifecycleBusy = true;
     const kind = target.dataset.lifecycle;
     const feedback = root.querySelector('[data-lifecycle-feedback]');
     const payload = kind === 'start'
@@ -767,6 +787,7 @@ root.addEventListener('click', async (event) => {
       const nextFeedback = root.querySelector('[data-lifecycle-feedback]');
       if (nextFeedback) nextFeedback.textContent = error instanceof Error ? error.message : '遊戲局操作未完成。';
     } finally {
+      lifecycleBusy = false;
       if (target.isConnected) target.disabled = false;
     }
     return;
@@ -1204,7 +1225,7 @@ export async function startObserverServer(): Promise<void> {
   let selectedSetupMapId = existingWorld?.mapId && store.readMapProfile(existingWorld.mapId) ? existingWorld.mapId : defaultProfile.mapId;
   const activeProfile = store.readMapProfile(selectedSetupMapId) ?? defaultProfile;
   let graph = graphFromMapProfile(baseGraph, activeProfile);
-  let actionContent: SimulationActionContent = { ...baseActionContent, nodeNotices: profileRows(activeProfile.nodeNotices) };
+  let actionContent: SimulationActionContent = actionContentForMapGraph(baseActionContent, graph, profileRows(activeProfile.nodeNotices));
   if (!existingWorld) {
     const world = createInitialWorld(graph, { seed: process.env.ISLAND_SEED ?? randomUUID(), contentVersion, residentCount: configuredResidentCount, modelAssignmentsBySlot: initialAssignments, monumentValleyDefaultDocuments, mapId: activeProfile.mapId });
     try {
@@ -1221,6 +1242,7 @@ export async function startObserverServer(): Promise<void> {
       graph = graphFromWorldState(baseGraph, existingWorld, graph);
     }
   }
+  actionContent = actionContentForMapGraph(baseActionContent, graph, profileRows(activeProfile.nodeNotices));
   const runner = new SimulationRunner({ store, settings: modelSettings, secrets, graph, actionContent });
   const deathSummaries = new DeathSummaryService(store, modelSettings, secrets);
   const deathSummaryTimer = setInterval(() => {
@@ -1244,7 +1266,7 @@ export async function startObserverServer(): Promise<void> {
       const selectedProfile = store.readMapProfile(mapId ?? selectedSetupMapId);
       if (!selectedProfile) throw new Error('找不到指定地圖存檔，請重新選擇。');
       graph = graphFromMapProfile(baseGraph, selectedProfile);
-      actionContent = { ...baseActionContent, nodeNotices: profileRows(selectedProfile.nodeNotices) };
+      actionContent = actionContentForMapGraph(baseActionContent, graph, profileRows(selectedProfile.nodeNotices));
       await runner.pauseAndWait();
       runner.setMapContent(graph, actionContent);
       configuredResidentCount = await readResidentCountSetting(resolve(moduleDirectory, '../..'));
@@ -1262,12 +1284,12 @@ export async function startObserverServer(): Promise<void> {
       if (missingResidents.length > 0) {
         throw new Error(`無法開始新局：居民 ${missingResidents.join('、')} 尚未分配有效模型卡。請先完成模型卡設定並為每位居民選卡；同一張有效卡可以重複使用。`);
       }
-      const initial = syncWorldNodeNotices(createInitialWorld(graph, { seed: randomUUID(), contentVersion, residentCount, modelAssignmentsBySlot: assignments, monumentValleyDefaultDocuments, mapId: selectedProfile.mapId }), actionContent.nodeNotices ?? []);
+      const initial = syncWorldNodeNotices(createInitialWorld(graph, { seed: randomUUID(), contentVersion, residentCount, modelAssignmentsBySlot: assignments, modelSlotIdsByResident: selectedCards, monumentValleyDefaultDocuments, mapId: selectedProfile.mapId }), actionContent.nodeNotices ?? []);
       store.startNewWorldSession(name ?? `輪迴島 ${new Date().toLocaleString('zh-TW')}`, residentCount, initial, selectedCards);
       runner.pause();
     },
     save: async (name) => { await runner.pauseAndWait(); store.saveCurrentWorldSession(name); },
-    end: async () => { await runner.pauseAndWait(); store.endCurrentWorldSession(); },
+    end: async () => { await runner.stopAndWaitForEnd(); store.endCurrentWorldSession(); },
     load: async (saveId) => {
       await runner.pauseAndWait();
       store.loadWorldSessionSave(saveId);
@@ -1276,7 +1298,7 @@ export async function startObserverServer(): Promise<void> {
       const resolvedProfile = loadedProfile ?? defaultProfile;
       const fallbackGraph = graphFromMapProfile(baseGraph, resolvedProfile);
       graph = loaded ? graphFromWorldState(baseGraph, loaded, fallbackGraph) : fallbackGraph;
-      actionContent = baseActionContent;
+      actionContent = actionContentForMapGraph(baseActionContent, graph, profileRows(resolvedProfile.nodeNotices));
       runner.setMapContent(graph, actionContent);
       runner.resume();
     },
@@ -1327,6 +1349,24 @@ async function handleRequest(
   if (request.method === 'GET' && (url.pathname === editorPrefix || url.pathname === `${editorPrefix}/`)) {
     sendHtml(response, editorMarkup(editorBasePath()));
     return;
+  }
+  if (url.pathname === `${editorPrefix}/api/editor/saves`) {
+    if (!store) { sendJson(response, 503, { error: '存檔管理尚未連接。' }); return; }
+    if (request.method === 'GET') {
+      sendJson(response, 200, { saves: store.listWorldSessionSaves() });
+      return;
+    }
+    if (request.method === 'DELETE') {
+      try {
+        const body = await readJsonBody(request);
+        if (typeof body.saveId !== 'string') throw new Error('請指定存檔 ID。');
+        store.deleteWorldSessionSave(body.saveId);
+        sendJson(response, 200, { ok: true });
+      } catch (error) {
+        sendJson(response, 409, { error: error instanceof Error ? error.message : '存檔未刪除。' });
+      }
+      return;
+    }
   }
   if (url.pathname === `${editorPrefix}/api/editor/resident-count` && store) {
     const root = resolve(moduleDirectory, '../..');
@@ -1420,7 +1460,7 @@ async function handleRequest(
   }
   if (request.method === 'GET' && url.pathname === '/') {
     const snapshot = await port.readSnapshot();
-    const settings = await readSettingsView(modelSettings, secrets, store.readLatestAiFormatError());
+    const settings = await readSettingsView(modelSettings, secrets, store?.readLatestAiFormatError() ?? null);
     sendHtml(response, `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>輪迴島觀察台</title><link rel="stylesheet" href="/observer.css"></head><body><div id="app">${renderObserverMarkup(snapshot, selectionFromUrl(url), settings)}</div><script src="/observer-client.js" defer></script></body></html>`);
     return;
   }
@@ -1454,7 +1494,7 @@ async function handleRequest(
   }
   if (request.method === 'GET' && url.pathname === '/api/observer') {
     const snapshot = await port.readSnapshot();
-    const settings = await readSettingsView(modelSettings, secrets, store.readLatestAiFormatError());
+    const settings = await readSettingsView(modelSettings, secrets, store?.readLatestAiFormatError() ?? null);
     sendJson(response, 200, { markup: renderObserverMarkup(snapshot, selectionFromUrl(url), settings) });
     return;
   }
@@ -1566,6 +1606,13 @@ async function handleRequest(
       if (boundState !== currentState) store.commit(currentState.sequence, boundState, []);
     }
     sendJson(response, 200, { saved: true, ready: isModelSlotReady(saved, secrets.has(saved.credentialRef)), apiKeyConfigured: secrets.has(saved.credentialRef) });
+    return;
+  }
+  if (request.method === 'POST' && url.pathname === '/api/settings/slot/create') {
+    if (!store || !modelSettings) { sendJson(response, 503, { error: '模型設定儲存尚未連接。' }); return; }
+    if (store.readCurrentWorldSession()?.status === 'in-progress') { sendJson(response, 409, { error: '遊戲中不可新增模型卡；請先結束本局。' }); return; }
+    const slot = modelSettings.createSlot();
+    sendJson(response, 200, { slotId: slot.slotId });
     return;
   }
   if (request.method === 'POST' && url.pathname === '/api/settings/summarizer') {
@@ -1843,7 +1890,7 @@ export async function createAndStoreOpenRouterSlotKey(
   management: ProcessOpenRouterManagement,
   fetcher: typeof fetch = fetch,
 ): Promise<{ readonly created: true; readonly slotId: number; readonly keyConfigured: true; readonly name: string; readonly hash: string }> {
-  if (!Number.isInteger(slotId) || slotId < 1 || slotId > 10) throw new Error('模型槽位必須為 1–10。');
+  if (!Number.isSafeInteger(slotId) || slotId < 1) throw new Error('模型槽位必須是正整數。');
   if (secrets.has(credentialRef) || management.getSlotKeyHash(slotId)) throw new Error('此槽位已有已保存金鑰，避免重複建立。');
   const created = await createOpenRouterInferenceKey(managementKey, `IslandSim resident slot ${slotId}`, fetcher);
   secrets.set(credentialRef, created.secret);

@@ -31,10 +31,9 @@ export function currentPriceForBinding(binding: ModelBinding | null, slots: read
 }
 
 export function modelAssignmentsBySlot(slots: readonly ModelSlotConfig[], secrets: ProcessModelSecrets): Readonly<Record<number, ModelBinding | null>> {
-  return Object.fromEntries(Array.from({ length: 10 }, (_, index) => {
-    const slotId = index + 1;
-    const slot = slots.find((candidate) => candidate.slotId === slotId);
-    if (slot === undefined || !isModelSlotReady(slot, secrets.has(slot.credentialRef))) return [slotId, null] as const;
+  return Object.fromEntries(slots.map((slot) => {
+    const slotId = slot.slotId;
+    if (!isModelSlotReady(slot, secrets.has(slot.credentialRef))) return [slotId, null] as const;
     const binding: ModelBinding = {
       slotId,
       provider: slot.provider,
@@ -57,7 +56,7 @@ export function modelAssignmentsBySlot(slots: readonly ModelSlotConfig[], secret
 export function bindUnstartedInitialResidents(state: WorldState, assignments: Readonly<Record<number, ModelBinding | null>>): WorldState {
   if (state.sequence !== 0) return state;
   const residents = Object.values(state.actors).filter((actor) => actor.actorType === 'resident' && actor.alive);
-  if (residents.length !== 10 || residents.some((actor) => actor.lastActionId !== undefined && actor.lastActionId !== null)) return state;
+  if (residents.some((actor) => actor.lastActionId !== undefined && actor.lastActionId !== null)) return state;
   let changed = false;
   const actors: Record<string, WorldActor> = { ...state.actors };
   for (const actor of residents) {

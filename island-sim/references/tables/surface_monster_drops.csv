@@ -1,0 +1,8 @@
+monster,item_id,drop_chance_percent,status,notes
+夜間蝙蝠,碎肉,100,user_confirmed_2026-10-26,地表小型生物擊殺保證掉落
+沙灘螃蟹,碎肉,100,user_confirmed_2026-10-26,地表小型生物擊殺保證掉落
+電鰻,碎肉,100,user_confirmed_2026-10-26,釣魚遭遇生物擊殺保證掉落
+夜狼,肉,100,user_confirmed_2026-10-26,地表大型動物擊殺保證掉落
+森林野豬,肉,100,user_confirmed_2026-10-26,地表大型動物擊殺保證掉落
+山羊,肉,100,user_confirmed_2026-10-26,地表大型動物擊殺保證掉落
+河流夜熊,肉,100,user_confirmed_2026-10-26,地表大型動物擊殺保證掉落

@@ -11,7 +11,7 @@ source_label,inventory_id,category,identity_status,note
 空白紙條,空白紙條,功能道具,user_authorized_definition,身份定義；文字與使用效果未配置
 鐵槍,鐵矛,武器,user_approved_single_approximation,保留來源標籤
 騎士劍,騎士劍,武器,exact_catalog_match,原始標籤保留
-雙手巨劍,雙手巨劍,武器,user_authorized_definition,雙手武器；ATK 7；SPD 0
+鐵級雙手武器,鐵級雙手武器,武器,exact_catalog_match,雙手武器；ATK 7；DEF 0；SPD 0
 鐵盾,鐵盾,防具,exact_catalog_match,原始標籤保留
 鎖甲上裝,鎖甲上衣,防具,user_approved_single_approximation,保留來源標籤
 鎖甲下裝,鎖甲下裝,防具,user_authorized_definition,鎖甲下裝；DEF 2；SPD 0

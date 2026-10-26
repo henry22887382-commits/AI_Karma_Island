@@ -10,7 +10,7 @@ export type SurfaceCapability =
   | 'river-exploration'
   | 'night-river-dive';
 
-export type ProposalEvidence = 'port-classification' | 'coconut-beach-classification' | 'grouped-forest-label-candidate' | 'user-confirmed-forest-terrain-candidate' | 'user-selected-rock-terrain-candidate' | 'grouped-river-label-candidate';
+export type ProposalEvidence = 'port-classification' | 'coconut-beach-classification' | 'berry-forest-classification' | 'forest-terrain-candidate' | 'rock-terrain-candidate' | 'river-classification';
 
 export interface SurfaceCapabilityCandidate {
   readonly action: SurfaceCapability;
@@ -59,30 +59,20 @@ export function createSurfaceCapabilitiesProposal(rows: readonly CsvRow[]): Surf
     const candidates: SurfaceCapabilityCandidate[] = [];
     if (surfaceTerrain === 'port') candidates.push({ action: 'fishing', evidence: 'port-classification', basis: 'Fishing is available only at Nodes classified as ports.' });
     if (surfaceTerrain === 'coconut-beach') candidates.push({ action: 'coconut-harvest', evidence: 'coconut-beach-classification', basis: 'Coconut harvest follows the Node terrain and gameplay classification.' });
-    // Keep the pre-label-edit proposal set (9/11/17/23) bounded while using
-    // structured terrain instead of interpreting the editable display name.
-    if (['9', '11', '17', '23'].includes(nodeId) && row.surface_terrain === 'forest') {
-      const userConfirmedForest = labelStatus.startsWith('使用者確認');
-      const evidence = userConfirmedForest ? 'user-confirmed-forest-terrain-candidate' as const : 'grouped-forest-label-candidate' as const;
-      const basis = userConfirmedForest
-        ? 'The user confirmed this Node is forest; the exact pointwise assignment for this active interaction remains a proposal.'
-        : 'The source confirms forest actions; this Node name comes from grouped map labels and is not an individually confirmed interaction assignment.';
+    if (surfaceTerrain === 'berry-forest') candidates.push({ action: 'forest-berry-gather', evidence: 'berry-forest-classification', basis: 'Berry gathering follows the Node berry-forest classification.' });
+    if (surfaceTerrain === 'forest' || surfaceTerrain === 'berry-forest') {
+      candidates.push({ action: 'forest-boar-area', evidence: 'forest-terrain-candidate', basis: 'Wild-boar areas follow forest and berry-forest classifications; exact spawn placement remains unresolved.' });
+    }
+    if (surfaceTerrain === 'rock') {
       candidates.push(
-        { action: 'forest-berry-gather', evidence, basis },
-        { action: 'forest-boar-area', evidence, basis: userConfirmedForest ? 'Node terrain is user-confirmed forest; exact wild-boar spawn Node assignments remain unresolved.' : 'The source places wild boar in forest Nodes; encounter rate and exact Node assignments remain unresolved.' },
+        { action: 'rock-exploration', evidence: 'rock-terrain-candidate', basis: 'Rock exploration follows pure rock terrain; dungeon entrances remain a separate classification.' },
+        { action: 'goat-hunt-area', evidence: 'rock-terrain-candidate', basis: 'Goat-hunt areas follow pure rock terrain; dungeon entrances remain a separate classification.' },
       );
     }
-    const selectedRockTerrainCandidate = ['6', '19', '22'].includes(nodeId) && row.surface_terrain === 'rock';
-    if (selectedRockTerrainCandidate) {
+    if (surfaceTerrain === 'river') {
       candidates.push(
-        { action: 'rock-exploration', evidence: 'user-selected-rock-terrain-candidate', basis: 'This is a user-selected rock-terrain candidate; exact interaction mapping remains bounded to the adopted Node IDs.' },
-        { action: 'goat-hunt-area', evidence: 'user-selected-rock-terrain-candidate', basis: 'This is a user-selected rock-terrain candidate; exact goat-hunt mapping remains unresolved.' },
-      );
-    }
-    if (nodeId === '24' && row.surface_terrain === 'river') {
-      candidates.push(
-        { action: 'river-exploration', evidence: 'grouped-river-label-candidate', basis: 'The source defines a river exploration pool; the map names this Node River but retains grouped-label uncertainty.' },
-        { action: 'night-river-dive', evidence: 'grouped-river-label-candidate', basis: 'Night diving is source-backed; exact usable Node ID and night-bear sequence remain unresolved.' },
+        { action: 'river-exploration', evidence: 'river-classification', basis: 'River exploration follows river classification.' },
+        { action: 'night-river-dive', evidence: 'river-classification', basis: 'Night river diving follows river classification; it remains available only at night.' },
       );
     }
     return { nodeId, surfaceTerrain, label, labelStatus, candidates, runtimeEnabled: false as const };
@@ -90,7 +80,8 @@ export function createSurfaceCapabilitiesProposal(rows: readonly CsvRow[]): Surf
 
   const beachCandidates = nodes.filter((node) => node.surfaceTerrain === 'coconut-beach').map((node) => node.nodeId);
   const fishingCandidates = nodes.filter((node) => node.surfaceTerrain === 'port').map((node) => node.nodeId);
-  const selected = rows.filter((row) => row.surface_terrain === 'coconut-beach').map((row) => row.node_id ?? '');
+  const berryForestCandidates = nodes.filter((node) => node.surfaceTerrain === 'berry-forest').map((node) => node.nodeId);
+  const selected = nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'coconut-harvest')).map((node) => node.nodeId);
   if (nodes.length !== 28 || new Set(nodes.map((node) => node.nodeId)).size !== 28) throw new Error('Surface capability proposal requires the unique 28-Node source map.');
   if (selected.some((id) => !beachCandidates.includes(id))) throw new Error('Proposed coconut Node candidates must be source beach-type Nodes.');
   return {
@@ -100,22 +91,22 @@ export function createSurfaceCapabilitiesProposal(rows: readonly CsvRow[]): Surf
     proposedActionNodeIds: {
       fishing: fishingCandidates,
       'coconut-harvest': selected,
-      'forest-berry-gather': ['9', '11', '17', '23'],
-      'forest-boar-area': ['9', '11', '17', '23'],
-      'rock-exploration': ['6', '19', '22'],
-      'goat-hunt-area': ['6', '19', '22'],
-      'river-exploration': ['24'],
-      'night-river-dive': ['24'],
+      'forest-berry-gather': berryForestCandidates,
+      'forest-boar-area': nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'forest-boar-area')).map((node) => node.nodeId),
+      'rock-exploration': nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'rock-exploration')).map((node) => node.nodeId),
+      'goat-hunt-area': nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'goat-hunt-area')).map((node) => node.nodeId),
+      'river-exploration': nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'river-exploration')).map((node) => node.nodeId),
+      'night-river-dive': nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'night-river-dive')).map((node) => node.nodeId),
     },
     proposalRationale: {
       fishing: 'Fishing is restricted to Nodes classified as ports; the candidate list follows the current map classification.',
-      'coconut-harvest': 'Propose 1/8/13 as three separated beach-type candidates; the source confirms three beaches but does not assign IDs.',
-      'forest-berry-gather': 'Use forest labels 9/11/17/23 as candidates; Node 11 terrain is user-confirmed, while the other names retain grouped-map correspondence caveats.',
-      'forest-boar-area': 'Use the same forest-labeled candidates 9/11/17/23; Node 11 terrain is user-confirmed, while pointwise wild-boar spawn Nodes remain unspecified.',
-      'rock-exploration': 'Use the user-selected, rock-classified Nodes 6/19/22 as candidates; the source does not mark exact interaction Nodes.',
-      'goat-hunt-area': 'Use the user-selected, rock-classified Nodes 6/19/22 as candidates; exact goat-hunt Node IDs remain unspecified.',
-      'river-exploration': 'Use the Node 24 River label as the single candidate; it retains grouped-label correspondence status.',
-      'night-river-dive': 'Use the Node 24 River label as the single candidate; exact dive capability and night-bear pool sequencing remain unresolved.',
+      'coconut-harvest': 'Coconut harvest candidates follow the current coconut-beach classifications.',
+      'forest-berry-gather': 'Berry gathering follows the editable berry-forest classification on the active map.',
+      'forest-boar-area': 'Forest-boar candidates follow forest and berry-forest classifications; exact spawn placement remains unspecified.',
+      'rock-exploration': 'Rock-exploration candidates follow pure rock classification; dungeon entrances remain separate.',
+      'goat-hunt-area': 'Goat-hunt candidates follow pure rock classification; exact spawn placement remains unspecified.',
+      'river-exploration': 'River-exploration candidates follow river classification.',
+      'night-river-dive': 'Night-dive candidates follow river classification and the action remains night-only.',
     },
     coconut: {
       candidateBeachNodeIds: beachCandidates,
@@ -127,7 +118,7 @@ export function createSurfaceCapabilitiesProposal(rows: readonly CsvRow[]): Surf
       sourceHarvestCostT: 3,
       runtimeEnabled: false,
       unresolved: [
-        'The selected IDs 1/8/13 are engineering candidates based only on beach type and separation; no source assigns coconut beaches to those Nodes.',
+        'Coconut candidates follow the current map classification; their runtime assignments are still subject to the existing approval boundary.',
         'Initial coconut stock is not specified by the source; zero is a conservative review proposal, not a recovered rule.',
         'All per-Node action candidates require approval before any runtime capability is enabled.',
       ],

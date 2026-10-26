@@ -10,21 +10,36 @@ if errorlevel 1 (
 
 echo [1] Start Island Sim
 echo [2] Stop a verified Island Sim server
-choice /c 12 /t 5 /d 1 /n /m "Choose an action (defaults to Start in 5 seconds): "
+echo [3] Reboot a verified Island Sim server
+choice /c 123 /t 5 /d 1 /n /m "Choose an action (defaults to Start in 5 seconds): "
+if errorlevel 4 goto invalid_choice
+if errorlevel 3 goto reboot
 if errorlevel 2 goto stop
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0island-launcher.ps1" -Action Start
 set "LAUNCHER_EXIT_CODE=%ERRORLEVEL%"
-if not "%LAUNCHER_EXIT_CODE%"=="0" call :show_failure
-if "%LAUNCHER_EXIT_CODE%"=="0" call :show_completion
-exit /b %LAUNCHER_EXIT_CODE%
+goto finish
+
+:reboot
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0island-launcher.ps1" -Action Stop
+set "LAUNCHER_EXIT_CODE=%ERRORLEVEL%"
+if not "%LAUNCHER_EXIT_CODE%"=="0" goto finish
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0island-launcher.ps1" -Action Start
+set "LAUNCHER_EXIT_CODE=%ERRORLEVEL%"
+goto finish
 
 :stop
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0island-launcher.ps1" -Action Stop
 set "LAUNCHER_EXIT_CODE=%ERRORLEVEL%"
+
+:finish
 if not "%LAUNCHER_EXIT_CODE%"=="0" call :show_failure
 if "%LAUNCHER_EXIT_CODE%"=="0" call :show_completion
 exit /b %LAUNCHER_EXIT_CODE%
+
+:invalid_choice
+echo Could not read a valid launcher action.
+exit /b 1
 
 :show_completion
 echo.

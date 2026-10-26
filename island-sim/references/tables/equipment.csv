@@ -5,9 +5,9 @@ weapon,騎士劍,knight,one_hand,7,0,0,false,summary_verified,
 weapon,木矛,wood,one_hand,2,0,2,false,summary_verified,
 weapon,鐵矛,iron,one_hand,4,0,2,false,summary_verified,
 weapon,騎士矛,knight,one_hand,6,0,2,false,summary_verified,
-weapon,木級雙手武器,wood,both_hands,4,0,,false,summary_verified,正式名稱及速度待回查
-weapon,鐵級雙手武器,iron,both_hands,7,0,,false,summary_verified,正式名稱及速度待回查
-weapon,騎士級雙手武器,knight,both_hands,10,0,,false,summary_verified,正式名稱及速度待回查
+weapon,木級雙手武器,wood,both_hands,4,0,0,false,summary_verified,正式名稱待回查；速度修正0由使用者確認
+weapon,鐵級雙手武器,iron,both_hands,7,0,0,false,summary_verified,容器掉落與升級共用的鐵級雙手武器；速度修正0由使用者確認
+weapon,騎士級雙手武器,knight,both_hands,10,0,0,false,summary_verified,正式名稱待回查；速度修正0由使用者確認
 weapon,勇者劍,hero,one_hand,15,0,,true,summary_verified,第三層火蜥蜴條件保證掉落
 shield,簡易盾,simple,off_hand,0,1,0,false,summary_verified,
 shield,鐵盾,iron,off_hand,0,2,0,false,summary_verified,
@@ -28,7 +28,6 @@ heavy_bottom,簡易重甲下衣,simple,bottom,0,2,-3,false,summary_verified,
 heavy_bottom,鐵重甲下衣,iron,bottom,0,3,-3,false,summary_verified,
 heavy_bottom,騎士重甲下衣,knight,bottom,0,4,-3,false,summary_verified,
 bottom,布下裝,cloth,bottom,0,0,1,false,user_authorized_container_definition,容器物品定義
-weapon,雙手巨劍,iron,both_hands,7,0,0,false,user_authorized_container_definition,容器物品定義
 bottom,鎖甲下裝,chain,bottom,0,2,0,false,user_authorized_container_definition,容器物品定義
 top,騎士上裝,knight,top,0,3,0,false,user_authorized_container_definition,容器物品定義
 bottom,騎士下裝,knight,bottom,0,2,1,false,user_authorized_container_definition,容器物品定義

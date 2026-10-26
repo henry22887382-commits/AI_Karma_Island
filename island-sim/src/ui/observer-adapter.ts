@@ -1,5 +1,6 @@
 import type { WorldEvent, WorldState } from '../domain/model.ts';
 import { describeWorldEvent } from '../domain/event-narrative.ts';
+import { canonicalInventoryItemId } from '../domain/item-identity.ts';
 import type { IslandGraph } from '../content/island.ts';
 import { formatNodeLocationReference, locationNameForNode } from '../content/location-names.ts';
 import { dayPhaseAt } from '../engine/clock.ts';
@@ -238,8 +239,8 @@ export function projectSnapshot(state: WorldState, events: readonly WorldEvent[]
       ...(typeof resident.hitPoints === 'number' ? { remainingLife: resident.hitPoints } : {}),
       ...(typeof resident.hunger === 'number' ? { hunger: resident.hunger } : {}),
       ...(typeof resident.sleep === 'number' ? { sleep: resident.sleep } : {}),
-      inventory: resident.inventory ?? [],
-      equipment: Object.entries(resident.equipment ?? {}).flatMap(([slot, item]) => item ? [`${slot}：${item}`] : []),
+      inventory: (resident.inventory ?? []).map(canonicalInventoryItemId),
+      equipment: Object.entries(resident.equipment ?? {}).flatMap(([slot, item]) => item ? [`${slot}：${canonicalInventoryItemId(item)}`] : []),
       lastAction: resident.lastActionId ?? '',
       lastActionResult: resident.lastActionResult ?? '',
       intents: residentIntents.get(resident.id) ?? [],
@@ -251,12 +252,13 @@ export function projectSnapshot(state: WorldState, events: readonly WorldEvent[]
 }
 
 function itemDisplayName(itemId: string): string {
+  itemId = canonicalInventoryItemId(itemId);
   const names: Readonly<Record<string, string>> = {
     '紙筆': '紙筆', '告示牌': '告示牌', '炸彈': '一次性炸彈', '營火': '營火',
     '漂流瓶': '漂流瓶', '空白紙條': '空白紙條', '探險者筆記': '探險者筆記', '書籍': '書籍',
     '椰子': '椰子', '魚': '魚', '肉': '肉', '破損木劍': '破木劍', '鐵劍': '鐵劍',
     '布衣': '布上裝', '布下裝': '布下裝', '簡易盾': '簡易盾牌', '鐵矛': '鐵槍',
-    '騎士劍': '騎士劍', '雙手巨劍': '雙手巨劍', '鐵盾': '鐵盾', '鎖甲上衣': '鎖甲上裝',
+    '騎士劍': '騎士劍', '鐵盾': '鐵盾', '鎖甲上衣': '鎖甲上裝',
     '鎖甲下裝': '鎖甲下裝', '騎士級雙手武器': '騎士雙手劍', '騎士盾': '騎士盾',
     '騎士上裝': '騎士上裝', '騎士下裝': '騎士下裝', '騎士重甲上衣': '騎士重甲上裝',
     '騎士重甲下衣': '騎士重甲下裝',
@@ -503,9 +505,11 @@ function describeObserverEvent(event: WorldEvent, state?: WorldState, config?: O
   if (event.kind === 'surface-action-resolved') return describeWorldEvent(event, { actor, itemName: itemDisplayName, createdItems });
   if (event.kind === 'item-picked-up') return `${actor}拾起${typeof payload.itemId === 'string' ? `「${itemDisplayName(payload.itemId)}」` : '一件物品'}`;
   if (event.kind === 'item-dropped') return `${actor}放下${typeof payload.itemId === 'string' ? `「${itemDisplayName(payload.itemId)}」` : '一件物品'}`;
+  if (event.kind === 'item-used') return `${actor}用掉一件普通垃圾，沒有產生其他效果`;
   if (event.kind === 'scene-object-destroyed') return `${actor}拆除了${typeof payload.itemId === 'string' ? `「${itemDisplayName(payload.itemId)}」` : '一件放置物'}`;
   if (event.kind === 'resident-ate') return `${actor}吃下${typeof payload.itemId === 'string' ? `「${itemDisplayName(payload.itemId)}」` : '食物'}`;
   if (event.kind === 'item-equipped') return `${actor}穿戴或拿起了${typeof payload.itemId === 'string' ? `「${itemDisplayName(payload.itemId)}」` : '一件裝備'}`;
+  if (event.kind === 'item-upgraded') return `${actor}使用魔法石，把${typeof payload.fromItemId === 'string' ? `「${itemDisplayName(payload.fromItemId)}」` : '裝備'}升級為${typeof payload.toItemId === 'string' ? `「${itemDisplayName(payload.toItemId)}」` : '更高階裝備'}`;
   if (event.kind === 'coconut-harvested') return `${actor}採收並取得${typeof payload.itemId === 'string' ? `「${itemDisplayName(payload.itemId)}」` : '椰子'}`;
   if (event.kind === 'container-opened') {
     const item = typeof payload.itemId === 'string' ? itemDisplayName(payload.itemId) : undefined;
@@ -722,7 +726,7 @@ function isInternalIdentifier(value: string): boolean {
 }
 
 function toChineseUnresolved(sourceId: string, detail: string): string {
-  if (sourceId === 'D-012') return '十名居民的不同主模型與目前供應商設定尚未完成。';
+  if (sourceId === 'D-012') return '尚有居民未分配已完成設定的模型卡。';
   if (sourceId === 'BOOT-START-BEACH') return '起始沙灘設定尚未完成。';
   return detail;
 }

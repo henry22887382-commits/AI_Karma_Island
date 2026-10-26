@@ -7,12 +7,13 @@ import { dayPhaseAt } from './clock.ts';
 import { SeededRandom, seedToState } from './random.ts';
 import { environmentTerrainForClassification } from '../domain/node-classification.ts';
 import { locationNameForNode } from '../content/location-names.ts';
+import { advanceCoconutBeachStocks } from '../domain/surface.ts';
 
 /** Legacy default exposed for old snapshots and callers; active spawns use graph data. */
 export const START_BEACH_NODE_IDS = LEGACY_START_BEACH_NODE_IDS;
 export const CENTRAL_CAMPFIRE_NODE_ID = '25';
 export const MIN_RESIDENT_COUNT = 1;
-export const MAX_RESIDENT_COUNT = 10;
+export const DEFAULT_RESIDENT_COUNT = 10;
 
 export interface InitialWorldOptions {
   readonly seed: string;
@@ -20,15 +21,16 @@ export interface InitialWorldOptions {
   readonly residentCount?: number;
   readonly mapId?: string;
   readonly modelAssignmentsBySlot?: Readonly<Record<number, ModelBinding | null>>;
+  readonly modelSlotIdsByResident?: Readonly<Record<number, number>>;
   readonly monumentValleyDefaultDocuments?: readonly { readonly id: string; readonly text: string }[];
 }
 
 export function createInitialWorld(graph: IslandGraph, options: InitialWorldOptions): WorldState {
   if (options.seed.length === 0) throw new Error('World seed must be supplied explicitly.');
   if (options.contentVersion.length === 0) throw new Error('Content version must be supplied explicitly.');
-  const residentCount = options.residentCount ?? MAX_RESIDENT_COUNT;
-  if (!Number.isInteger(residentCount) || residentCount < MIN_RESIDENT_COUNT || residentCount > MAX_RESIDENT_COUNT) {
-    throw new RangeError(`Resident count must be from ${MIN_RESIDENT_COUNT} to ${MAX_RESIDENT_COUNT}.`);
+  const residentCount = options.residentCount ?? DEFAULT_RESIDENT_COUNT;
+  if (!Number.isSafeInteger(residentCount) || residentCount < MIN_RESIDENT_COUNT) {
+    throw new RangeError(`Resident count must be a positive safe integer.`);
   }
   validateStartBeaches(graph);
   const nodes = toWorldNodes(graph);
@@ -38,6 +40,7 @@ export function createInitialWorld(graph: IslandGraph, options: InitialWorldOpti
     const id = `resident-${String(index + 1).padStart(2, '0')}`;
     const vitals = createInitialVitals();
     const spawn = chooseStartBeachNode(graph, rng, `resident-generation-1-start:${id}`);
+    const modelSlotId = options.modelSlotIdsByResident?.[index + 1] ?? index + 1;
     const modelAssignment = options.modelAssignmentsBySlot?.[index + 1] ?? null;
     bootstrapRandomDraws.push(spawn.draw);
     const actor: WorldActor = {
@@ -64,7 +67,7 @@ export function createInitialWorld(graph: IslandGraph, options: InitialWorldOpti
       styleDescription: modelAssignment?.styleDescription ?? null,
       generation: 1,
       slotId: String(index),
-      modelSlotId: index + 1,
+      modelSlotId,
       inventory: [],
       equipment: {},
       aiMemory: { processedThroughSequence: 0, entries: [] },
@@ -72,12 +75,17 @@ export function createInitialWorld(graph: IslandGraph, options: InitialWorldOpti
     return [id, actor] as const;
   }));
   const unresolved: readonly UnresolvedIssue[] = [
-    { sourceId: 'D-012', detail: 'Ten distinct model assignments and current provider configuration are not configured.' },
+    { sourceId: 'D-012', detail: 'Every resident needs a configured model card before the game starts.' },
   ];
   const surfaceCapabilities = createActiveSurfaceCapabilities(graph.nodes.map((node) => ({
     node_id: node.id, node_label: node.label ?? '', label_status: node.labelStatus,
     surface_terrain: node.surfaceTerrain ?? '',
   })));
+  const openingCoconutProduction = advanceCoconutBeachStocks({
+    beachNodeIds: surfaceCapabilities.coconut.nodeIds,
+    stockByNode: surfaceCapabilities.coconut.initialStockByNode,
+    elapsedIslandDays: 1,
+  });
   const initialCampfireObjects: Record<string, WorldObject> = {};
   for (const nodeId of initialCampfireNodeIds(graph.nodes)) {
     const campfireId = `default-campfire-node-${nodeId}`;
@@ -109,9 +117,9 @@ export function createInitialWorld(graph: IslandGraph, options: InitialWorldOpti
         authorActorId: '工房預設',
         createdAtT: 0,
       })),
-    surfaceStocks: { schemaVersion: 1, byNode: { ...surfaceCapabilities.coconut.initialStockByNode }, advancedThroughDay: 0 },
+    surfaceStocks: { schemaVersion: 1, byNode: { ...openingCoconutProduction.stocks }, advancedThroughDay: 0 },
     bootstrapRandomDraws,
-    unresolved,
+    unresolved: [...unresolved, ...openingCoconutProduction.unresolved.map(({ sourceId, detail }) => ({ sourceId, detail }))],
   };
 }
 

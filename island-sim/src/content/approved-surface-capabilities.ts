@@ -1,18 +1,6 @@
 import type { CsvRow } from './csv.ts';
 import { createSurfaceCapabilitiesProposal, type SurfaceCapability } from './surface-capabilities-proposal.ts';
 
-export const USER_SELECTED_SURFACE_CAPABILITY_CANDIDATE_NODE_IDS = {
-  // Fishing is derived from each active map's port classification.
-  fishing: [],
-  'coconut-harvest': ['1', '8', '13'],
-  'forest-berry-gather': ['9', '17', '23'],
-  'forest-boar-area': ['9', '17', '23'],
-  'rock-exploration': ['6', '19', '22'],
-  'goat-hunt-area': ['6', '19', '22'],
-  'river-exploration': ['24'],
-  'night-river-dive': ['24'],
-} as const satisfies Readonly<Record<SurfaceCapability, readonly string[]>>;
-
 export interface SurfaceCapabilitiesPendingImageVerification {
   readonly status: 'user-selected-candidate-pending-direct-image-verification';
   readonly runtimeEnabled: false;
@@ -22,10 +10,10 @@ export interface SurfaceCapabilitiesPendingImageVerification {
     readonly mapBasis: 'references/tables/island_nodes.csv and references/03A_28Node原圖與鄰接表.md; image-level labels remain unverified';
     readonly boundary: 'do not use these interaction assignments at runtime or claim the original map labels them until direct PNG inspection is completed';
   };
-  readonly candidateActionNodeIds: typeof USER_SELECTED_SURFACE_CAPABILITY_CANDIDATE_NODE_IDS;
+  readonly candidateActionNodeIds: Readonly<Record<SurfaceCapability, readonly string[]>>;
   readonly coconut: {
-    readonly nodeIds: readonly ['1', '8', '13'];
-    readonly initialStockByNode: Readonly<Record<'1' | '8' | '13', 0>>;
+    readonly nodeIds: readonly string[];
+    readonly initialStockByNode: Readonly<Record<string, 0>>;
     readonly productionPerNodePerIslandDay: 1;
     readonly maximumStockPerNode: 3;
     readonly naturalStockExpires: false;
@@ -37,8 +25,8 @@ export interface ActiveSurfaceCapabilities {
   readonly status: 'active-user-approved';
   readonly runtimeEnabled: true;
   readonly nodeIdsByAction: Readonly<Record<SurfaceCapability, readonly string[]>>;
-  readonly provenanceByAction: Readonly<Record<SurfaceCapability, 'source-group-derived-and-user-adopted' | 'user-adopted-supplemental'> & {
-    readonly 'forest-berry-gather': 'source-group-derived-and-user-adopted';
+  readonly provenanceByAction: Readonly<Record<SurfaceCapability, 'source-group-derived-and-user-adopted' | 'user-adopted-supplemental' | 'user-confirmed-terrain-classification'> & {
+    readonly 'forest-berry-gather': 'user-confirmed-terrain-classification';
     readonly 'forest-boar-area': 'source-group-derived-and-user-adopted';
     readonly 'rock-exploration': 'source-group-derived-and-user-adopted';
     readonly 'goat-hunt-area': 'source-group-derived-and-user-adopted';
@@ -60,26 +48,17 @@ export interface ActiveSurfaceCapabilities {
 /** Runtime mapping uses the user's adopted crosswalk; provenance distinguishes grouped map evidence from supplemental choices. */
 export function createActiveSurfaceCapabilities(nodeRows: readonly CsvRow[]): ActiveSurfaceCapabilities {
   const review = createSurfaceCapabilitiesProposal(nodeRows);
-  for (const [action, nodeIds] of Object.entries(USER_SELECTED_SURFACE_CAPABILITY_CANDIDATE_NODE_IDS) as [SurfaceCapability, readonly string[]][]) {
-    if (action === 'coconut-harvest') continue;
-    for (const nodeId of nodeIds) {
-      const node = review.nodes.find((row) => row.nodeId === nodeId);
-      if (!node?.candidates.some((candidate) => candidate.action === action)) throw new Error(`Approved capability ${action} does not match the source-map candidate at Node ${nodeId}.`);
-    }
-  }
-  const coconutNodeIds = nodeRows.filter((row) => row.surface_terrain === 'coconut-beach').map((row) => row.node_id ?? '').filter(Boolean);
-  const fishingNodeIds = nodeRows.filter((row) => row.surface_terrain === 'port').map((row) => row.node_id ?? '').filter(Boolean);
+  const nodeIdsByAction = review.proposedActionNodeIds;
+  const coconutNodeIds = nodeIdsByAction['coconut-harvest'];
   if (coconutNodeIds.length !== 3 || new Set(coconutNodeIds).size !== 3) throw new Error('Exactly three Nodes must use the coconut-beach classification.');
-  const knownNodeIds = new Set(nodeRows.map((row) => row.node_id ?? ''));
-  if (coconutNodeIds.some((nodeId) => !knownNodeIds.has(nodeId))) throw new Error('Coconut beach classification references a missing Node.');
   const initialStockByNode = Object.fromEntries(coconutNodeIds.map((nodeId) => [nodeId, 0])) as Readonly<Record<string, 0>>;
   return {
     status: 'active-user-approved',
     runtimeEnabled: true,
-    nodeIdsByAction: { ...USER_SELECTED_SURFACE_CAPABILITY_CANDIDATE_NODE_IDS, fishing: fishingNodeIds, 'coconut-harvest': coconutNodeIds },
+    nodeIdsByAction,
     provenanceByAction: {
       fishing: 'user-adopted-supplemental', 'coconut-harvest': 'user-adopted-supplemental',
-      'forest-berry-gather': 'source-group-derived-and-user-adopted', 'forest-boar-area': 'source-group-derived-and-user-adopted',
+      'forest-berry-gather': 'user-confirmed-terrain-classification', 'forest-boar-area': 'source-group-derived-and-user-adopted',
       'rock-exploration': 'source-group-derived-and-user-adopted', 'goat-hunt-area': 'source-group-derived-and-user-adopted',
       'river-exploration': 'source-group-derived-and-user-adopted', 'night-river-dive': 'source-group-derived-and-user-adopted',
     },
@@ -94,12 +73,6 @@ export function createActiveSurfaceCapabilities(nodeRows: readonly CsvRow[]): Ac
 /** Builds a held candidate mapping. Directly inspect the original referenced image before enabling it in runtime. */
 export function createSurfaceCapabilitiesPendingImageVerification(nodeRows: readonly CsvRow[]): SurfaceCapabilitiesPendingImageVerification {
   const review = createSurfaceCapabilitiesProposal(nodeRows);
-  for (const [action, nodeIds] of Object.entries(USER_SELECTED_SURFACE_CAPABILITY_CANDIDATE_NODE_IDS) as [SurfaceCapability, readonly string[]][]) {
-    for (const nodeId of nodeIds) {
-      const node = review.nodes.find((row) => row.nodeId === nodeId);
-      if (!node?.candidates.some((candidate) => candidate.action === action)) throw new Error(`Approved capability ${action} does not match the source-map candidate at Node ${nodeId}.`);
-    }
-  }
   return {
     status: 'user-selected-candidate-pending-direct-image-verification',
     runtimeEnabled: false,
@@ -108,9 +81,10 @@ export function createSurfaceCapabilitiesPendingImageVerification(nodeRows: read
       mapBasis: 'references/tables/island_nodes.csv and references/03A_28Node原圖與鄰接表.md; image-level labels remain unverified',
       boundary: 'do not use these interaction assignments at runtime or claim the original map labels them until direct PNG inspection is completed',
     },
-    candidateActionNodeIds: USER_SELECTED_SURFACE_CAPABILITY_CANDIDATE_NODE_IDS,
+    candidateActionNodeIds: review.proposedActionNodeIds,
     coconut: {
-      nodeIds: ['1', '8', '13'], initialStockByNode: { '1': 0, '8': 0, '13': 0 },
+      nodeIds: review.proposedActionNodeIds['coconut-harvest'],
+      initialStockByNode: Object.fromEntries(review.proposedActionNodeIds['coconut-harvest'].map((nodeId) => [nodeId, 0])),
       productionPerNodePerIslandDay: 1, maximumStockPerNode: 3,
       naturalStockExpires: false, harvestCostT: 3,
     },

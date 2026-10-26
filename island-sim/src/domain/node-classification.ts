@@ -13,6 +13,7 @@ export const NODE_CLASSIFICATION_BEHAVIOR: Readonly<Record<SurfaceTerrainClassif
   beach: { environmentTerrain: 'beach', daySurfaceEntryEvents: true, coconutBeach: false, dungeonEntrance: false, monumentValley: false },
   'coconut-beach': { environmentTerrain: 'beach', daySurfaceEntryEvents: true, coconutBeach: true, dungeonEntrance: false, monumentValley: false },
   forest: { environmentTerrain: 'forest', daySurfaceEntryEvents: true, coconutBeach: false, dungeonEntrance: false, monumentValley: false },
+  'berry-forest': { environmentTerrain: 'forest', daySurfaceEntryEvents: true, coconutBeach: false, dungeonEntrance: false, monumentValley: false },
   river: { environmentTerrain: 'river', daySurfaceEntryEvents: true, coconutBeach: false, dungeonEntrance: false, monumentValley: false },
   rock: { environmentTerrain: 'rock', daySurfaceEntryEvents: true, coconutBeach: false, dungeonEntrance: false, monumentValley: false },
   'dungeon-entrance': { environmentTerrain: 'rock', daySurfaceEntryEvents: true, coconutBeach: false, dungeonEntrance: true, monumentValley: false },
@@ -39,6 +40,7 @@ export function hasNodeClassificationBehavior(
 export function visualTypeForClassification(classification: SurfaceTerrainClassification): string | null {
   switch (classification) {
     case 'coconut-beach': return '椰子沙灘';
+    case 'berry-forest': return '莓果森林';
     case 'dungeon-entrance': return '地牢入口';
     case 'port': return '港口';
     case 'monument-valley': return '紀念碑谷';

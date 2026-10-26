@@ -31,7 +31,7 @@ export class SimulationRunner {
   private readonly settings: ModelSettingsStore;
   private readonly secrets: ProcessModelSecrets;
   private graph: IslandGraph;
-  private actionContent?: SimulationActionContent;
+  private actionContent: SimulationActionContent | undefined;
   private readonly intervalMs: number;
   private readonly fetcher?: typeof fetch;
   private readonly clock: () => Date;
@@ -40,6 +40,7 @@ export class SimulationRunner {
   private status = '模擬已暫停，等待操作。';
   private loopActive = false;
   private inStep = false;
+  private activeStepController: AbortController | null = null;
   private readonly routerHealth = new Map<string, RouterHealth>();
 
   constructor(options: SimulationRunnerOptions) {
@@ -73,6 +74,14 @@ export class SimulationRunner {
     while (this.inStep) await delay(10);
   }
 
+  async stopAndWaitForEnd(): Promise<void> {
+    this.pause();
+    this.activeStepController?.abort();
+    const deadline = performance.now() + 5_000;
+    while (this.inStep && performance.now() < deadline) await delay(10);
+    if (this.inStep) throw new Error('目前的模型請求尚未停止；遊戲仍維持暫停，請稍後再試結束當局。');
+  }
+
   resume(): void {
     if (!this.paused) return;
     const snapshot = this.store.readSnapshot();
@@ -99,6 +108,8 @@ export class SimulationRunner {
   async stepOnce(): Promise<void> {
     if (this.inStep) throw new Error('上一個世界事件仍在處理。');
     this.inStep = true;
+    const stepController = new AbortController();
+    this.activeStepController = stepController;
     try {
       const state = this.store.readSnapshot();
       if (!state) return this.stop('找不到世界快照；沒有執行模擬。');
@@ -164,7 +175,9 @@ export class SimulationRunner {
         primary: providers.primary,
         ...(providers.fallback ? { fallback: providers.fallback } : {}),
         health,
+        signal: stepController.signal,
       });
+      stepController.signal.throwIfAborted();
       this.routerHealth.set(actor.id, outcome.health);
       if (outcome.kind === 'budget-blocked') return this.stop(outcome.reason);
       if (outcome.kind === 'provider-unavailable') return this.stop(`居民 ${actor.id} 的主模型與備援目前都無法完成請求。`);
@@ -192,8 +205,11 @@ export class SimulationRunner {
       if (!settled.ok) return this.stop(`合法動作結算失敗：${settled.unresolved.join('；')}`);
       this.status = `居民 ${actor.id} 已結算合法動作 ${settled.event.kind}。`;
     } catch {
-      this.stop('模擬事件處理失敗；已暫停，請檢查本機設定與事件資料。');
+      this.stop(stepController.signal.aborted
+        ? '目前的模型請求已取消；模擬維持暫停。'
+        : '模擬事件處理失敗；已暫停，請檢查本機設定與事件資料。');
     } finally {
+      if (this.activeStepController === stepController) this.activeStepController = null;
       this.inStep = false;
     }
   }

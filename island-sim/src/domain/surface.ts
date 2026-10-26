@@ -2,6 +2,7 @@ import type { CsvRow } from '../content/csv.ts';
 import { activeForestBerryPool } from '../content/surface-user-overrides.ts';
 import { SURFACE_USER_RULE_OVERRIDES } from '../content/surface-user-overrides.ts';
 import { SeededRandom } from '../engine/random.ts';
+import { canonicalInventoryItemId } from './item-identity.ts';
 import type { JsonValue, RandomDraw, WorldObject } from './model.ts';
 
 export type SurfaceAction = 'fishing' | 'river-exploration' | 'night-river-dive' | 'rock-exploration' | 'forest-berry-gather';
@@ -223,6 +224,11 @@ export function resolveSurfaceAction(input: {
     const main = input.tables.fishing.filter((row) => row.parent_group === 'main');
     const selected = drawFrom(main, 'overall_probability_percent', 'surface.fishing.main');
     outcome = required(selected, 'outcome');
+    if (outcome === '垃圾總計') {
+      const garbage = input.tables.fishing.filter((row) => row.parent_group === 'garbage');
+      outcome = required(drawFrom(garbage, 'conditional_probability_percent', 'surface.fishing.garbage'), 'outcome');
+    }
+    outcome = canonicalInventoryItemId(outcome);
     if (outcome === '電鰻') spawnMonsterName = '電鰻';
   } else if (input.action === 'river-exploration' || input.action === 'night-river-dive') {
     const bearAction = input.phase === 'night' ? '河流探索_夜間' : '河流探索_白天';
@@ -255,7 +261,7 @@ export function resolveSurfaceAction(input: {
       }
     }
   } else {
-    const rawRows = input.tables.recovered.filter((row) => row.action === '森林採野莓' && row.status === 'user_confirmed_active_2026-10-22');
+    const rawRows = input.tables.recovered.filter((row) => row.action === '森林採野莓' && row.status?.startsWith('user_confirmed_active_'));
     const activePool = activeForestBerryPool();
     const rows = rawRows.map((row) => {
       const override = activePool.find((entry) => entry.outcome === row.result_or_hazard);
@@ -267,6 +273,14 @@ export function resolveSurfaceAction(input: {
   const award = isSurfaceItemOutcome(input.action, outcome);
   const uniqueItemAlreadyExists = outcome === '勇者下甲' && ((input.existingUniqueItems ?? []).includes(outcome) || input.actor.inventory.includes(outcome));
   const createdObjects: WorldObject[] = [];
+  if (input.action === 'rock-exploration' && outcome === '寶箱') {
+    if (input.objectId === undefined || input.objectId.length === 0) unresolved.push({ sourceId: 'surface-container-object-id', detail: 'A stable ground-object ID is required for the rock chest.' });
+    else createdObjects.push({
+      id: input.objectId, itemId: '寶箱', objectType: 'container', containerSourceId: '地表漂流木箱',
+      remainsActorId: null, ownerActorId: null, nodeId: input.nodeId, generatedAtT: input.worldTimeT,
+      expiresAtT: input.worldTimeT + 72, unique: false, provisional: false,
+    });
+  }
   if (award && !uniqueItemAlreadyExists) {
     const capacity = input.inventoryCapacity ?? 10;
     if (!Number.isSafeInteger(capacity) || capacity < 0) throw new RangeError('Inventory capacity must be a nonnegative integer.');
@@ -300,8 +314,8 @@ function isSurfaceItemOutcome(action: SurfaceAction, outcome: string | null): ou
   if (outcome === null) return false;
   if (action === 'fishing') return !['空竿', '電鰻', '雜物總計'].includes(outcome);
   if (action === 'river-exploration' || action === 'night-river-dive') return ['普通魚', '名鮭魚'].includes(outcome);
-  if (action === 'rock-exploration') return ['魔法石', '寶箱'].includes(outcome);
-  return outcome === '有益野果';
+  if (action === 'rock-exploration') return outcome === '魔法石';
+  return outcome === '莓果' || outcome === '毒莓';
 }
 
 export interface AreaEntryRiskResult {

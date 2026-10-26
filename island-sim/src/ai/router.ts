@@ -185,6 +185,7 @@ export type ProviderCallContext = {
   readonly operation: 'action' | 'message' | 'biography';
   readonly retry: boolean;
   readonly messageActionIds?: readonly string[];
+  readonly signal?: AbortSignal;
 };
 
 export type ProviderPricing = {
@@ -333,6 +334,7 @@ export type DecisionInput = {
   readonly fallback?: ModelProvider;
   readonly health: RouterHealth;
   readonly operation?: ProviderCallContext['operation'];
+  readonly signal?: AbortSignal;
 };
 
 type ProviderRun =
@@ -341,20 +343,24 @@ type ProviderRun =
   | { readonly kind: 'budget-blocked'; readonly reason: string }
   | { readonly kind: 'transport-failure' };
 
-async function runProvider(provider: ModelProvider, prompt: string, actions: readonly CandidateAction[], operation: ProviderCallContext['operation']): Promise<ProviderRun> {
+async function runProvider(provider: ModelProvider, prompt: string, actions: readonly CandidateAction[], operation: ProviderCallContext['operation'], signal?: AbortSignal): Promise<ProviderRun> {
   if (!provider.ready) return { kind: 'transport-failure' };
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    signal?.throwIfAborted();
     let completion: ProviderCompletion;
     try {
       completion = await provider.complete(prompt, 512, {
         operation,
         retry: attempt > 0,
         messageActionIds: actions.filter((action) => action.requiresText).map((action) => action.id),
+        ...(signal ? { signal } : {}),
       });
     } catch (error) {
+      signal?.throwIfAborted();
       if (error instanceof ProviderBudgetBlockedError) return { kind: 'budget-blocked', reason: error.message };
       continue;
     }
+    signal?.throwIfAborted();
     const validation = validateModelReply(completion.raw, actions);
     if (!validation.ok) return { kind: 'format-error', reason: validation.reason, rawOutput: completion.raw };
     const action = actions.find((candidate) => candidate.id === validation.value.actionId);
@@ -382,7 +388,7 @@ export async function executeDecision(input: DecisionInput): Promise<DecisionOut
   }
 
   if (health.activeProvider === 'fallback' && health.probePrimaryNext) {
-    const probe = await runProvider(input.primary, input.prompt, input.actions, input.operation ?? 'action');
+    const probe = await runProvider(input.primary, input.prompt, input.actions, input.operation ?? 'action', input.signal);
     if (probe.kind === 'valid') {
       health = recordPrimaryProbe(health, true);
       return { kind: 'proposal', proposal: toProposal(input.actorId, probe), providerId: input.primary.id, health };
@@ -396,14 +402,14 @@ export async function executeDecision(input: DecisionInput): Promise<DecisionOut
 
   const active = health.activeProvider === 'primary' ? input.primary : input.fallback;
   if (!active?.ready) return { kind: 'provider-unavailable', health };
-  const run = await runProvider(active, input.prompt, input.actions, input.operation ?? 'action');
+  const run = await runProvider(active, input.prompt, input.actions, input.operation ?? 'action', input.signal);
   if (run.kind === 'budget-blocked') return { kind: 'budget-blocked', reason: run.reason, health };
   if (run.kind === 'format-error') return { kind: 'format-error', hesitationTimeT: 1, reason: run.reason, rawOutput: run.rawOutput, health };
   if (run.kind === 'transport-failure') {
     if (active === input.primary) {
       for (let attempt = 0; attempt < 3; attempt += 1) health = recordPrimaryTransportFailure(health);
       if (!input.fallback?.ready) return { kind: 'provider-unavailable', health };
-      const fallbackRun = await runProvider(input.fallback, input.prompt, input.actions, input.operation ?? 'action');
+      const fallbackRun = await runProvider(input.fallback, input.prompt, input.actions, input.operation ?? 'action', input.signal);
       if (fallbackRun.kind === 'budget-blocked') return { kind: 'budget-blocked', reason: fallbackRun.reason, health };
       if (fallbackRun.kind === 'format-error') return { kind: 'format-error', hesitationTimeT: 1, reason: fallbackRun.reason, rawOutput: fallbackRun.rawOutput, health };
       if (fallbackRun.kind === 'transport-failure') return { kind: 'provider-unavailable', health };

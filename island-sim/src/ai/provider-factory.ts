@@ -113,10 +113,12 @@ class FallbackChainProvider implements ModelProvider {
 
   async complete(input: string, maxOutputTokens: number, context?: Parameters<ModelProvider['complete']>[2]) {
     for (const provider of this.providers) {
+      context?.signal?.throwIfAborted();
       if (!provider.ready) continue;
       try {
         return await provider.complete(input, maxOutputTokens, context);
       } catch (error) {
+        context?.signal?.throwIfAborted();
         if (error instanceof Error && error.name === 'ProviderBudgetBlockedError') throw error;
       }
     }

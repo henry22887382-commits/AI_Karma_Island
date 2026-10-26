@@ -97,7 +97,7 @@ test('container category and item weights use both source stages and return one 
   const result = drawContainerItem({ source, categoryWeights, subpools, random: new SeededRandom('12345678') });
   assert.equal(result.provisional, false);
   assert.equal(result.status, 'user_confirmed_one_item_per_item_container');
-  assert.ok(['椰子', '魚', '肉'].includes(result.item ?? ''));
+  assert.ok(subpools.some((row) => row.source === source && row.item === result.item));
   assert.equal(effectiveRates.find((row) => row.source === source && row.item === result.item)?.status, 'derived_from_two_stage_pool');
 });
 

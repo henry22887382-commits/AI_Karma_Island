@@ -13,6 +13,10 @@ export interface WorldActor {
   readonly dungeonLocation?: DungeonLocation | null;
   readonly sleeping: boolean;
   readonly sleepingSinceT?: number | null;
+  /** Number of complete 8T blocks already credited in the current continuous sleep. */
+  readonly sleepRecoveryBlocks?: number;
+  /** Island day in which this resident last earned sleep through continuous rest. */
+  readonly sleepRecoveryDay?: number | null;
   readonly hitPoints?: number;
   readonly hunger?: number;
   readonly sleep?: number;
@@ -116,7 +120,7 @@ export interface DungeonEncounterState {
 }
 
 export type SurfaceTerrain = 'beach' | 'forest' | 'river' | 'rock';
-export type SurfaceTerrainClassification = SurfaceTerrain | 'unclassified' | 'coconut-beach' | 'dungeon-entrance' | 'port' | 'monument-valley';
+export type SurfaceTerrainClassification = SurfaceTerrain | 'unclassified' | 'coconut-beach' | 'berry-forest' | 'dungeon-entrance' | 'port' | 'monument-valley';
 
 export interface WorldNode {
   readonly id: string;

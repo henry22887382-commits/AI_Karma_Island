@@ -120,3 +120,14 @@ test('shows a public message to the named same-Node recipient on their next acti
   assert.equal(built.ok, true);
   if (built.ok) assert.match(built.input.narration, /居民 1\.1向2\.1發送公開訊息：「請一起探索河流」/);
 });
+
+test('includes a resident HP loss summary in that resident next AI input, including off-Node events', () => {
+  const healthLoss: WorldEvent = {
+    eventId: 'daily-loss-2.1', sequence: 4, worldTimeT: 72, actorId: null, nodeId: null,
+    kind: 'daily-survival-settled', visibility: 'public',
+    payload: { hpChanges: [{ actorId: '2.1', damage: 3, remainingHp: 1 }] }, randomDraws: [],
+  };
+  const built = buildAiInput({ ...state, sequence: 4 }, '2.1', legalActions, [healthLoss], formatAiNarrativeEvent, { processedThroughSequence: 3, entries: [] });
+  assert.equal(built.ok, true);
+  if (built.ok) assert.match(built.input.narration, /你失去了 3 點餘命，目前剩餘 1 點/);
+});

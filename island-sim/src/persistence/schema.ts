@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const INITIAL_SCHEMA_SQL = `
 CREATE TABLE schema_migrations (
@@ -46,7 +46,7 @@ CREATE TABLE world_sessions (
   session_id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('setup', 'in-progress', 'ended')),
-  resident_count INTEGER NOT NULL CHECK (resident_count BETWEEN 1 AND 10),
+  resident_count INTEGER NOT NULL CHECK (resident_count >= 1),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 ) STRICT;
@@ -67,8 +67,8 @@ CREATE TABLE world_session_saves (
 
 CREATE TABLE setup_model_assignments (
   session_id TEXT NOT NULL REFERENCES world_sessions(session_id) ON DELETE CASCADE,
-  resident_index INTEGER NOT NULL CHECK (resident_index BETWEEN 1 AND 10),
-  template_slot INTEGER NOT NULL CHECK (template_slot BETWEEN 1 AND 10),
+  resident_index INTEGER NOT NULL CHECK (resident_index >= 1),
+  template_slot INTEGER NOT NULL CHECK (template_slot >= 1),
   PRIMARY KEY (session_id, resident_index)
 ) STRICT;
 

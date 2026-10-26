@@ -126,7 +126,7 @@ export async function loadIslandGraph(directory: URL): Promise<IslandGraph> {
 
 function parseSurfaceTerrain(value: string, nodeId: string | undefined): SurfaceTerrainClassification | null {
   if (value === '' || value === 'unclassified') return 'unclassified';
-  if (['beach', 'forest', 'river', 'rock', 'coconut-beach', 'dungeon-entrance', 'port', 'monument-valley'].includes(value)) return value as SurfaceTerrainClassification;
+  if (['beach', 'forest', 'berry-forest', 'river', 'rock', 'coconut-beach', 'dungeon-entrance', 'port', 'monument-valley'].includes(value)) return value as SurfaceTerrainClassification;
   throw new Error(`Node ${nodeId ?? 'unknown'} has unsupported surface_terrain value ${value}.`);
 }
 

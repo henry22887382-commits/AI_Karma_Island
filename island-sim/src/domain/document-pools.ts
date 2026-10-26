@@ -1,4 +1,4 @@
-export type ReadableDocumentPool = 'book' | 'drift-bottle' | 'monument-valley';
+export type ReadableDocumentPool = 'book' | 'drift-bottle' | 'monument-valley' | 'signboard';
 
 export interface ReadableDocument {
   readonly id: string;

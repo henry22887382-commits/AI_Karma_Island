@@ -32,6 +32,7 @@ export function describeWorldEvent(event: WorldEvent, context: EventNarrativeCon
       ? sameAsSpawn ? `，遇到${outcome}`
         : outcome === '空竿' ? '，沒有釣到魚'
           : outcome === '無收穫' ? '，沒有收穫'
+          : actionId === 'rock-exploration' && outcome === '寶箱' ? '，發現可開啟的寶箱'
         : resultIsItem && actionId === 'fishing' ? `，釣到${outcome}`
           : resultIsItem ? `，得到${outcome}` : `，結果：${outcome}`
       : '';
@@ -75,9 +76,11 @@ export function describeWorldEvent(event: WorldEvent, context: EventNarrativeCon
     'trade-rejected': (p) => `${participant(p.receiverId, '居民')}拒絕了${participant(p.proposerId, '居民')}提出的交換（${p.offeredItemId ? context.itemName(String(p.offeredItemId)) : '物品'}換${p.requestedItemId ? context.itemName(String(p.requestedItemId)) : '物品'}）${intent}`,
     'public-message-sent': (p) => `${context.actor}向${participant(p.recipientId, '居民')}傳話${typeof p.text === 'string' ? `：「${p.text}」` : ''}${intent}`,
     'item-dropped': () => `${context.actor}放下${item ?? '一件物品'}${intent}`,
+    'item-used': () => `${context.actor}用掉了${item ?? '一件物品'}，沒有產生其他效果${intent}`,
     'scene-object-destroyed': () => `${context.actor}拆除${item ?? '一件放置物'}${intent}`,
     'resident-ate': () => `${context.actor}吃下${item ?? '食物'}${intent}`,
     'item-equipped': () => `${context.actor}裝備${item ?? '一件物品'}${intent}`,
+    'item-upgraded': (p) => `${context.actor}用魔法石把${typeof p.fromItemId === 'string' ? context.itemName(p.fromItemId) : '一件裝備'}升級為${typeof p.toItemId === 'string' ? context.itemName(p.toItemId) : '更高階裝備'}${intent}`,
     'coconut-harvested': () => `${context.actor}採收並取得 1 顆椰子${typeof payload.stockAfter === 'number' ? `，海灘還剩 ${payload.stockAfter} 顆` : ''}${intent}`,
     'container-opened': () => `${context.actor}打開${typeof payload.containerName === 'string' ? payload.containerName : '容器'}${item ? `，找到${item}` : ''}${intent}`,
     'object-read': () => `${context.actor}閱讀${item ?? '一件物品'}${typeof payload.text === 'string' ? `：「${payload.text}」` : ''}${intent}`,
@@ -89,6 +92,9 @@ export function describeWorldEvent(event: WorldEvent, context: EventNarrativeCon
     'actor-moved': () => `${context.actor}${location ? `前往${location}` : '移動到新的地方'}${intent}`,
     'sleep-started': () => `${context.actor}開始休息${intent}`,
     'sleep-ended': () => `${context.actor}醒來了`,
+    'resident-sleep-recovered': (p) => typeof p.recovered === 'number' && p.recovered > 0
+      ? `${context.actor}連續睡眠後恢復了 ${p.recovered} 點睡眠值`
+      : `${context.actor}持續安睡，睡眠值維持在上限`,
     'world-object-expired': () => `${item ?? '地上的物品'}已消失`,
     'biography': () => `${context.actor}留下了一段生命回憶`,
     'monument-inscription-written': () => `${context.actor}在紀念碑留下文字${typeof payload.text === 'string' ? `：「${payload.text}」` : ''}${intent}`,
@@ -152,9 +158,9 @@ function numericDelta(value: unknown, label: string): string | undefined {
 
 function isSurfaceReward(action: string, outcome: string): boolean {
   const rewards: Readonly<Record<string, readonly string[]>> = {
-    fishing: ['普通魚', '藍鰭／黑鮪魚', '河豚', '普通垃圾', '漂流瓶', '普通皮革下衣', '勇者下甲'],
+    fishing: ['普通魚', '藍鰭/黑鮪魚', '藍鰭／黑鮪魚', '河豚', '普通垃圾', '超稀有垃圾', '漂流瓶', '布下裝', '普通皮革下衣', '勇者下甲'],
     'river-exploration': ['普通魚', '名鮭魚'], 'night-river-dive': ['普通魚', '名鮭魚'],
-    'rock-exploration': ['魔法石', '寶箱'], 'forest-berry-gather': ['有益野果'],
+    'rock-exploration': ['魔法石', '寶箱'], 'forest-berry-gather': ['莓果', '毒莓'],
   };
   return rewards[action]?.includes(outcome) === true;
 }

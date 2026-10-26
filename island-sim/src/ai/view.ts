@@ -3,6 +3,7 @@ import type { CandidateAction, ModelInput } from './router.ts';
 import { dayPhaseAt } from '../engine/clock.ts';
 import { locationNameForNode } from '../content/location-names.ts';
 import { isNodeCampfireProtected } from '../domain/campfire-safety.ts';
+import { canonicalInventoryItemId } from '../domain/item-identity.ts';
 
 export type AiLegalAction = {
   readonly id: string;
@@ -25,8 +26,21 @@ const PRIORITY_MEMORY_KINDS = new Set([
   'resident-ate',
 ]);
 
-function isPriorityMemoryEvent(event: WorldEvent): boolean {
+function residentHpChange(event: WorldEvent, actorId: string): { readonly damage: number; readonly remainingHp: number } | undefined {
+  const changes = asRecord(event.payload).hpChanges;
+  if (!Array.isArray(changes)) return undefined;
+  const change = changes.find((candidate) => asRecord(candidate).actorId === actorId);
+  if (change === undefined) return undefined;
+  const record = asRecord(change);
+  return typeof record.damage === 'number' && Number.isFinite(record.damage) && record.damage > 0
+    && typeof record.remainingHp === 'number' && Number.isFinite(record.remainingHp)
+    ? { damage: record.damage, remainingHp: record.remainingHp }
+    : undefined;
+}
+
+function isPriorityMemoryEvent(event: WorldEvent, actorId: string): boolean {
   return PRIORITY_MEMORY_KINDS.has(event.kind)
+    || residentHpChange(event, actorId) !== undefined
     || (event.kind === 'resident-action-settled' && asRecord(event.payload).actionType === 'sleep');
 }
 
@@ -94,9 +108,17 @@ function describeResidentAttack(event: WorldEvent, actorId: string, payload: Rec
 }
 
 export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): string | undefined {
-  const payload = asRecord(event.payload);
+  const rawPayload = asRecord(event.payload);
+  const payload: Record<string, unknown> = {
+    ...rawPayload,
+    ...(typeof rawPayload.itemId === 'string' ? { itemId: canonicalInventoryItemId(rawPayload.itemId) } : {}),
+    ...(typeof rawPayload.fromItemId === 'string' ? { fromItemId: canonicalInventoryItemId(rawPayload.fromItemId) } : {}),
+    ...(typeof rawPayload.toItemId === 'string' ? { toItemId: canonicalInventoryItemId(rawPayload.toItemId) } : {}),
+  };
   const self = event.actorId === actorId;
   const subject = self ? '你' : `居民 ${event.actorId ?? '未知'}`;
+  const hpChange = residentHpChange(event, actorId);
+  if (hpChange !== undefined) return `你失去了 ${hpChange.damage} 點餘命，目前剩餘 ${hpChange.remainingHp} 點。`;
   if (event.kind === 'resident-action-settled') {
     if (payload.actionType === 'wait') return `${subject}等待了。`;
     if (payload.actionType === 'move' && typeof payload.toNodeId === 'string') {
@@ -214,6 +236,7 @@ export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): stri
   if (event.kind === 'resident-ate' && self && typeof payload.itemId === 'string') return `你吃下了 ${payload.itemId}，補充飽食。`;
   if (event.kind === 'item-picked-up' && self && typeof payload.itemId === 'string') return `你撿起了 ${payload.itemId}。`;
   if (event.kind === 'item-equipped' && self && typeof payload.itemId === 'string') return `你裝備了 ${payload.itemId}。`;
+  if (event.kind === 'item-upgraded' && typeof payload.fromItemId === 'string' && typeof payload.toItemId === 'string') return `${self ? '你' : '一位居民'}用魔法石把 ${payload.fromItemId} 升級為 ${payload.toItemId}。`;
   if (event.kind === 'corpse-item-scavenged' && self && typeof payload.itemId === 'string') return `你從屍體取得了 ${payload.itemId}。`;
   if (event.kind === 'corpse-carried' && self) return '你搬起了一具屍體。';
   if (event.kind === 'corpse-dropped' && self) return '你放下了攜帶的屍體。';
@@ -254,7 +277,7 @@ function actorJson(actor: WorldActor, self: boolean): Readonly<Record<string, un
       remaining_life: actor.hitPoints,
       hunger: actor.hunger,
       sleep: actor.sleep,
-      inventory: actor.inventory ?? [],
+      inventory: (actor.inventory ?? []).map(canonicalInventoryItemId),
     };
   }
   return {
@@ -296,6 +319,7 @@ export function buildAiInput(
   const eligibleEvents = recentEvents
     .filter((event) => event.sequence > memory.processedThroughSequence && event.sequence <= state.sequence && event.visibility === 'public' && (
       event.actorId === actorId
+      || residentHpChange(event, actorId) !== undefined
       || (['gift-transferred', 'gift-dropped'].includes(event.kind) && asRecord(event.payload).recipientId === actorId)
       || (nodeId !== null && event.nodeId === nodeId && event.worldTimeT >= (self.unsafeEntryAtT ?? state.worldTimeT))
     ))
@@ -312,7 +336,7 @@ export function buildAiInput(
       eventId: event.eventId,
       kind: event.kind,
       text,
-      importance: isPriorityMemoryEvent(event) ? 'priority' : 'recent',
+      importance: isPriorityMemoryEvent(event, actorId) ? 'priority' : 'recent',
     });
   }
   const entries = boundResidentMemory([...memory.entries, ...(arrivalMemory && !memory.entries.some((entry) => entry.kind === 'arrival-memory') ? [arrivalMemory] : []), ...additions]);
