@@ -90,7 +90,7 @@ export type ObserverSnapshot = {
   };
   readonly unresolved?: readonly string[];
   readonly worldTime: { readonly day: number; readonly timeT: number; readonly phase: string };
-  readonly simulation: { readonly running: boolean; readonly speedLabel: string; readonly freshAt: string; readonly controllable?: boolean; readonly status?: string };
+  readonly simulation: { readonly running: boolean; readonly speedLabel: string; readonly speedMultiplier?: number; readonly freshAt: string; readonly controllable?: boolean; readonly status?: string };
   readonly map: { readonly nodes: readonly ObserverNode[]; readonly edges: readonly { readonly fromId: string; readonly toId: string }[] };
   readonly dungeonMap?: {
     readonly activeFloor: number | null;
@@ -127,7 +127,8 @@ export type ModelSettingsView = {
 
 export type ObserverControlRequest =
   | { readonly kind: 'pause' }
-  | { readonly kind: 'resume' };
+  | { readonly kind: 'resume' }
+  | { readonly kind: 'speed'; readonly value: number };
 
 export interface ObserverReadPort {
   readSnapshot(): Promise<ObserverSnapshot>;
@@ -203,7 +204,7 @@ function renderRecentIslandEvents(snapshot: ObserverSnapshot): string {
   const events = snapshot.events
     .filter((event) => event.visibility === 'public' || event.visibility === 'observer')
     .slice()
-    .sort((left, right) => right.day - left.day || right.timeT - left.timeT)
+    .sort((left, right) => right.day - left.day || right.timeT - left.timeT || (right.sequence ?? 0) - (left.sequence ?? 0))
     .slice(0, 5);
   const rows = events.map((event) => `<li><span>第 ${event.day} 日 · ${event.timeT}T</span><p>${escapeHtml(event.description)}</p><small>意圖：${escapeHtml(event.intent ?? '意圖未記錄')} · 互動雙方：${escapeHtml(event.interaction ?? '無居民互動對象（環境事件）')}</small><small>${formatEventLocation(event)}${event.actorId ? ` · ${escapeHtml(event.actorId)}` : ''}</small></li>`).join('');
   return `<section class="island-events" aria-labelledby="island-events-title"><div class="panel-heading"><div><p class="eyebrow">已結算紀錄</p><h3 id="island-events-title">最近島上事件</h3></div></div><ol class="island-event-list">${rows || '<li class="empty-state">目前沒有可顯示的事件</li>'}</ol><p class="help-text">完整時間線請切換「事件與傳記」。</p></section>`;
@@ -396,7 +397,9 @@ function renderResident(snapshot: ObserverSnapshot, selection: ObserverSelection
 
 function renderControls(snapshot: ObserverSnapshot): string {
   const controlDisabled = snapshot.simulation.controllable === false;
-  return `<section class="panel controls-panel" aria-label="模擬控制"><div class="status-copy"><span class="status-dot${snapshot.simulation.running ? ' is-running' : ''}"></span><strong>${snapshot.simulation.controllable === false ? '執行控制器未連接' : snapshot.simulation.running ? '模擬執行中' : '模擬已暫停'}</strong><span>${escapeHtml(snapshot.simulation.speedLabel)}</span>${snapshot.simulation.status ? `<span role="status">${escapeHtml(snapshot.simulation.status)}</span>` : ''}</div><div class="control-actions"><button type="button" data-control="pause"${controlDisabled || !snapshot.simulation.running ? ' disabled' : ''}>${renderUiIcon('pause')}暫停</button><button type="button" data-control="resume"${controlDisabled || snapshot.simulation.running ? ' disabled' : ''}>${renderUiIcon('play')}恢復</button></div><p class="control-feedback" data-control-feedback role="alert" aria-live="assertive" hidden></p></section>`;
+  const speed = snapshot.simulation.speedMultiplier ?? 1;
+  const speedOptions = [0.5, 1, 2].map((value) => `<option value="${value}"${value === speed ? ' selected' : ''}>${value} 倍</option>`).join('');
+  return `<section class="panel controls-panel" aria-label="模擬控制"><div class="status-copy"><span class="status-dot${snapshot.simulation.running ? ' is-running' : ''}"></span><strong>${snapshot.simulation.controllable === false ? '執行控制器未連接' : snapshot.simulation.running ? '模擬執行中' : '模擬已暫停'}</strong>${snapshot.simulation.status ? `<span role="status">${escapeHtml(snapshot.simulation.status)}</span>` : ''}</div><div class="control-actions"><button type="button" data-control="pause"${controlDisabled || !snapshot.simulation.running ? ' disabled' : ''}>${renderUiIcon('pause')}暫停</button><button type="button" data-control="resume"${controlDisabled || snapshot.simulation.running ? ' disabled' : ''}>${renderUiIcon('play')}恢復</button><label>模擬倍率<select data-control-setting="speed"${controlDisabled ? ' disabled' : ''}>${speedOptions}</select></label></div><p class="control-feedback" data-control-feedback role="alert" aria-live="assertive" hidden></p></section>`;
 }
 
 function renderSavedGameControls(snapshot: ObserverSnapshot, setup: boolean): string {

@@ -32,11 +32,11 @@ export class SimulationRunner {
   private readonly secrets: ProcessModelSecrets;
   private graph: IslandGraph;
   private actionContent: SimulationActionContent | undefined;
-  private readonly intervalMs: number;
+  private intervalMs: number;
   private readonly fetcher?: typeof fetch;
   private readonly clock: () => Date;
   private paused = true;
-  private readonly speedMultiplier = 1;
+  private speedMultiplier = 1;
   private status = '模擬已暫停，等待操作。';
   private loopActive = false;
   private inStep = false;
@@ -60,6 +60,15 @@ export class SimulationRunner {
 
   getState(): SimulationRunnerState {
     return { paused: this.paused, speedMultiplier: this.speedMultiplier, status: this.status };
+  }
+
+  setSpeed(multiplier: number): void {
+    const intervalByMultiplier: Readonly<Record<number, number>> = { 0.5: 2000, 1: 500, 2: 0 };
+    const intervalMs = intervalByMultiplier[multiplier];
+    if (intervalMs === undefined) throw new Error('模擬倍率僅接受 0.5、1 或 2 倍。');
+    this.speedMultiplier = multiplier;
+    this.intervalMs = intervalMs;
+    this.status = `模擬倍率已設為 ${multiplier} 倍。`;
   }
 
   pause(): void {

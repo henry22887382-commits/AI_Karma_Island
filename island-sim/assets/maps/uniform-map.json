@@ -1,0 +1,746 @@
+{
+  "name": "均勻地圖",
+  "nodes": [
+    {
+      "node_id": "1",
+      "visual_type": "椰子沙灘",
+      "node_label": "西採集點",
+      "label_status": "未逐點命名",
+      "region_description": "01–05：西側沙灘／椰子海灘／礁石／岬角",
+      "image_x_px_approx": "132",
+      "image_y_px_approx": "558",
+      "neighbor_count": "3",
+      "surface_terrain": "coconut-beach",
+      "surface_terrain_source": "user-confirmed-coconut-beach-classification",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "true"
+    },
+    {
+      "node_id": "2",
+      "visual_type": "海灘類",
+      "node_label": "西岬沙灘",
+      "label_status": "未逐點命名",
+      "region_description": "01–05：西側沙灘／椰子海灘／礁石／岬角",
+      "image_x_px_approx": "101",
+      "image_y_px_approx": "456",
+      "neighbor_count": "3",
+      "surface_terrain": "beach",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "3",
+      "visual_type": "一般地形",
+      "node_label": "西坡森林",
+      "label_status": "未逐點命名",
+      "region_description": "01–05：西側沙灘／椰子海灘／礁石／岬角",
+      "image_x_px_approx": "116",
+      "image_y_px_approx": "332",
+      "neighbor_count": "3",
+      "surface_terrain": "port",
+      "surface_terrain_source": "user-allocated-general-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "4",
+      "visual_type": "海灘類",
+      "node_label": "西北白灘",
+      "label_status": "未逐點命名",
+      "region_description": "01–05：西側沙灘／椰子海灘／礁石／岬角",
+      "image_x_px_approx": "162",
+      "image_y_px_approx": "208",
+      "neighbor_count": "3",
+      "surface_terrain": "beach",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "5",
+      "visual_type": "一般地形",
+      "node_label": "西源河灣",
+      "label_status": "未逐點命名",
+      "region_description": "01–05：西側沙灘／椰子海灘／礁石／岬角",
+      "image_x_px_approx": "256",
+      "image_y_px_approx": "112",
+      "neighbor_count": "3",
+      "surface_terrain": "river",
+      "surface_terrain_source": "user-allocated-general-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "6",
+      "visual_type": "一般地形",
+      "node_label": "北岸石堆",
+      "label_status": "中性 Node 編號",
+      "region_description": "06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘",
+      "image_x_px_approx": "367",
+      "image_y_px_approx": "59",
+      "neighbor_count": "3",
+      "surface_terrain": "rock",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "7",
+      "visual_type": "一般地形",
+      "node_label": "北風海岸",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘",
+      "image_x_px_approx": "517",
+      "image_y_px_approx": "53",
+      "neighbor_count": "3",
+      "surface_terrain": "beach",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "8",
+      "visual_type": "椰子沙灘",
+      "node_label": "北東休息站",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘",
+      "image_x_px_approx": "630",
+      "image_y_px_approx": "113",
+      "neighbor_count": "3",
+      "surface_terrain": "coconut-beach",
+      "surface_terrain_source": "user-confirmed-coconut-beach-classification",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "true"
+    },
+    {
+      "node_id": "9",
+      "visual_type": "一般地形",
+      "node_label": "東岸森林",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘",
+      "image_x_px_approx": "752",
+      "image_y_px_approx": "193",
+      "neighbor_count": "3",
+      "surface_terrain": "forest",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "10",
+      "visual_type": "海灘類",
+      "node_label": "東港",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘",
+      "image_x_px_approx": "810",
+      "image_y_px_approx": "317",
+      "neighbor_count": "3",
+      "surface_terrain": "port",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "11",
+      "visual_type": "一般地形",
+      "node_label": "河口森林",
+      "label_status": "使用者確認（2026-10-22）",
+      "region_description": "11–16：河口／椰子海灘／南側沙灘／港口",
+      "image_x_px_approx": "821",
+      "image_y_px_approx": "440",
+      "neighbor_count": "3",
+      "surface_terrain": "forest",
+      "surface_terrain_source": "user-confirmed-node-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "12",
+      "visual_type": "海灘類",
+      "node_label": "南灣沙灘",
+      "label_status": "未逐點命名",
+      "region_description": "11–16：河口／椰子海灘／南側沙灘／港口",
+      "image_x_px_approx": "758",
+      "image_y_px_approx": "561",
+      "neighbor_count": "3",
+      "surface_terrain": "beach",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "13",
+      "visual_type": "椰子沙灘",
+      "node_label": "南方據點",
+      "label_status": "未逐點命名",
+      "region_description": "11–16：河口／椰子海灘／南側沙灘／港口",
+      "image_x_px_approx": "663",
+      "image_y_px_approx": "689",
+      "neighbor_count": "3",
+      "surface_terrain": "coconut-beach",
+      "surface_terrain_source": "user-confirmed-coconut-beach-classification",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "true"
+    },
+    {
+      "node_id": "14",
+      "visual_type": "海灘類",
+      "node_label": "南岬沙灘",
+      "label_status": "未逐點命名",
+      "region_description": "11–16：河口／椰子海灘／南側沙灘／港口",
+      "image_x_px_approx": "546",
+      "image_y_px_approx": "744",
+      "neighbor_count": "3",
+      "surface_terrain": "beach",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "15",
+      "visual_type": "港口",
+      "node_label": "港口",
+      "label_status": "圖示明確",
+      "region_description": "11–16：河口／椰子海灘／南側沙灘／港口",
+      "image_x_px_approx": "418",
+      "image_y_px_approx": "752",
+      "neighbor_count": "3",
+      "surface_terrain": "port",
+      "surface_terrain_source": "canonical-special-location-classification",
+      "day_surface_entry_events_enabled": "false",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "16",
+      "visual_type": "海灘類",
+      "node_label": "西南白灘",
+      "label_status": "未逐點命名",
+      "region_description": "11–16：河口／椰子海灘／南側沙灘／港口",
+      "image_x_px_approx": "270",
+      "image_y_px_approx": "710",
+      "neighbor_count": "3",
+      "surface_terrain": "beach",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "17",
+      "visual_type": "一般地形",
+      "node_label": "西部森林",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "17–20：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "265",
+      "image_y_px_approx": "504",
+      "neighbor_count": "5",
+      "surface_terrain": "forest",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "18",
+      "visual_type": "一般地形",
+      "node_label": "西部林間空地",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "17–20：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "275",
+      "image_y_px_approx": "334",
+      "neighbor_count": "5",
+      "surface_terrain": "berry-forest",
+      "surface_terrain_source": "user-allocated-general-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "19",
+      "visual_type": "一般地形",
+      "node_label": "西脊石坡",
+      "label_status": "中性 Node 編號",
+      "region_description": "17–20：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "358",
+      "image_y_px_approx": "230",
+      "neighbor_count": "4",
+      "surface_terrain": "rock",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "20",
+      "visual_type": "一般地形",
+      "node_label": "北坡石山",
+      "label_status": "中性 Node 編號",
+      "region_description": "17–20：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "447",
+      "image_y_px_approx": "158",
+      "neighbor_count": "4",
+      "surface_terrain": "rock",
+      "surface_terrain_source": "user-allocated-general-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "21",
+      "visual_type": "地牢入口",
+      "node_label": "地下城入口",
+      "label_status": "圖示明確",
+      "region_description": "21–24：火山入口／東北石堆／東部森林／河流",
+      "image_x_px_approx": "507",
+      "image_y_px_approx": "228",
+      "neighbor_count": "2",
+      "surface_terrain": "dungeon-entrance",
+      "surface_terrain_source": "canonical-special-location-classification",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "22",
+      "visual_type": "一般地形",
+      "node_label": "東北森林",
+      "label_status": "中性 Node 編號",
+      "region_description": "21–24：火山入口／東北石堆／東部森林／河流",
+      "image_x_px_approx": "618",
+      "image_y_px_approx": "287",
+      "neighbor_count": "5",
+      "surface_terrain": "berry-forest",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "23",
+      "visual_type": "一般地形",
+      "node_label": "東部石堆",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "21–24：火山入口／東北石堆／東部森林／河流",
+      "image_x_px_approx": "668",
+      "image_y_px_approx": "413",
+      "neighbor_count": "5",
+      "surface_terrain": "rock",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "24",
+      "visual_type": "一般地形",
+      "node_label": "東側河流",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "21–24：火山入口／東北石堆／東部森林／河流",
+      "image_x_px_approx": "670",
+      "image_y_px_approx": "513",
+      "neighbor_count": "4",
+      "surface_terrain": "river",
+      "surface_terrain_source": "user-provided-location-group-mapping",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "25",
+      "visual_type": "中央營地",
+      "node_label": "中央營地",
+      "label_status": "圖示明確",
+      "region_description": "25–28：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "448",
+      "image_y_px_approx": "477",
+      "neighbor_count": "6",
+      "surface_terrain": "forest",
+      "surface_terrain_source": "user-confirmed-node-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "26",
+      "visual_type": "一般地形",
+      "node_label": "林畔河灘",
+      "label_status": "中性 Node 編號",
+      "region_description": "25–28：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "543",
+      "image_y_px_approx": "585",
+      "neighbor_count": "5",
+      "surface_terrain": "river",
+      "surface_terrain_source": "user-allocated-general-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "27",
+      "visual_type": "紀念碑谷",
+      "node_label": "神秘石碑",
+      "label_status": "圖示明確",
+      "region_description": "25–28：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "370",
+      "image_y_px_approx": "390",
+      "neighbor_count": "4",
+      "surface_terrain": "monument-valley",
+      "surface_terrain_source": "canonical-special-location-classification",
+      "day_surface_entry_events_enabled": "false",
+      "starting_location": "false"
+    },
+    {
+      "node_id": "28",
+      "visual_type": "一般地形",
+      "node_label": "內陸林間空地",
+      "label_status": "按群組順序對應（請勿視作已逐點命名）",
+      "region_description": "25–28：地圖 Node 群組（未逐點提供區域描述）",
+      "image_x_px_approx": "410",
+      "image_y_px_approx": "628",
+      "neighbor_count": "5",
+      "surface_terrain": "forest",
+      "surface_terrain_source": "user-allocated-general-terrain",
+      "day_surface_entry_events_enabled": "true",
+      "starting_location": "false"
+    }
+  ],
+  "edges": [
+    {
+      "source_node": "1",
+      "target_node": "2",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "1",
+      "target_node": "16",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "1",
+      "target_node": "17",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "2",
+      "target_node": "3",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "2",
+      "target_node": "17",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "3",
+      "target_node": "4",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "3",
+      "target_node": "18",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "4",
+      "target_node": "5",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "4",
+      "target_node": "18",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "5",
+      "target_node": "6",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "5",
+      "target_node": "19",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "6",
+      "target_node": "7",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "6",
+      "target_node": "20",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "7",
+      "target_node": "8",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "8",
+      "target_node": "9",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "8",
+      "target_node": "22",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "9",
+      "target_node": "10",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "9",
+      "target_node": "23",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "10",
+      "target_node": "11",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "10",
+      "target_node": "23",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "11",
+      "target_node": "12",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "11",
+      "target_node": "24",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "12",
+      "target_node": "13",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "13",
+      "target_node": "14",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "13",
+      "target_node": "26",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "14",
+      "target_node": "15",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "15",
+      "target_node": "16",
+      "bidirectional": "true",
+      "kind": "outer_ring",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "16",
+      "target_node": "17",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "17",
+      "target_node": "18",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "17",
+      "target_node": "25",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "18",
+      "target_node": "19",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "18",
+      "target_node": "27",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "19",
+      "target_node": "20",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "19",
+      "target_node": "27",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "20",
+      "target_node": "21",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "21",
+      "target_node": "22",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "22",
+      "target_node": "23",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "23",
+      "target_node": "24",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "23",
+      "target_node": "25",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "24",
+      "target_node": "26",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "25",
+      "target_node": "26",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "25",
+      "target_node": "27",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "25",
+      "target_node": "28",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "26",
+      "target_node": "28",
+      "bidirectional": "true",
+      "kind": "inner_link",
+      "evidence": "使用者提供的28Node地圖原圖"
+    },
+    {
+      "source_node": "21",
+      "target_node": "25",
+      "bidirectional": "true",
+      "kind": "editor_link",
+      "evidence": "editor"
+    },
+    {
+      "source_node": "28",
+      "target_node": "15",
+      "bidirectional": "true",
+      "kind": "editor_link",
+      "evidence": "editor"
+    },
+    {
+      "source_node": "16",
+      "target_node": "28",
+      "bidirectional": "true",
+      "kind": "editor_link",
+      "evidence": "editor"
+    }
+  ],
+  "nodeNotices": [
+    {
+      "node_id": "1",
+      "document_id": "starting-beach-remembrance"
+    },
+    {
+      "node_id": "8",
+      "document_id": "starting-beach-remembrance"
+    },
+    {
+      "node_id": "13",
+      "document_id": "starting-beach-remembrance"
+    },
+    {
+      "node_id": "21",
+      "document_id": "signboard-8513fa9b-4095-49ae-a6c8-2f55e5c9a187"
+    }
+  ]
+}

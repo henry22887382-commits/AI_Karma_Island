@@ -35,6 +35,15 @@ function residentHpChange(event: WorldEvent, actorId: string): { readonly damage
     : undefined;
 }
 
+function appendResidentHpChange(
+  narrative: string,
+  hpChange: { readonly damage: number; readonly remainingHp: number } | undefined,
+): string {
+  return hpChange === undefined
+    ? narrative
+    : `${narrative}；你失去了 ${hpChange.damage} 點餘命，目前剩餘 ${hpChange.remainingHp} 點。`;
+}
+
 function isPriorityMemoryEvent(event: WorldEvent, actorId: string): boolean {
   return PRIORITY_MEMORY_KINDS.has(event.kind)
     || residentHpChange(event, actorId) !== undefined
@@ -68,7 +77,9 @@ function damageEffect(appliedDamage: number, hitPointsBefore: number | undefined
 
 function describeResidentAttack(event: WorldEvent, actorId: string, payload: Record<string, unknown>): string | undefined {
   if (typeof payload.targetActorId !== 'string' || typeof payload.damage !== 'number' || !Number.isFinite(payload.damage)) return undefined;
-  const attacker = event.actorId === actorId ? '你' : '一位居民';
+  const attacker = event.actorId === actorId ? '你'
+    : payload.targetActorId === actorId && event.actorId !== null ? `居民 ${event.actorId}`
+      : '一位居民';
   const targetName = typeof payload.targetName === 'string' ? payload.targetName : undefined;
   const target = payload.targetType === 'monster' ? targetName === undefined ? '怪物' : `「${targetName}」`
     : payload.targetActorId === actorId ? '你' : '另一位居民';
@@ -110,7 +121,13 @@ export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): stri
   const self = event.actorId === actorId;
   const subject = self ? '你' : `居民 ${event.actorId ?? '未知'}`;
   const hpChange = residentHpChange(event, actorId);
-  if (hpChange !== undefined) return `你失去了 ${hpChange.damage} 點餘命，目前剩餘 ${hpChange.remainingHp} 點。`;
+  const attackEvent = event.kind === 'monster-action-settled'
+    || event.kind === 'resident-attacked'
+    || event.kind === 'boss1-defeated'
+    || event.kind === 'boss1-taunt-counterattack';
+  const hpChangeText = hpChange === undefined ? undefined : `你失去了 ${hpChange.damage} 點餘命，目前剩餘 ${hpChange.remainingHp} 點。`;
+  const withHpChange = (narrative: string) => appendResidentHpChange(narrative, hpChange);
+  if (hpChangeText !== undefined && !attackEvent) return hpChangeText;
   if (event.kind === 'resident-action-settled') {
     if (payload.actionType === 'wait') return `${subject}等待了。`;
     if (payload.actionType === 'move' && typeof payload.toNodeId === 'string') {
@@ -173,15 +190,15 @@ export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): stri
       const effect = damageEffect(damage, typeof firstHitPointsBefore === 'number' ? firstHitPointsBefore : undefined);
       return damage <= 0 ? `${target}沒有受到傷害` : `${target}${effect}${targetHits.some((hit) => hit.killed === true) ? '，倒下了' : ''}`;
     }).join('；');
-    if (payload.action === 'flying') return '大金剛鸚鵡飛到空中，這回合不會受到攻擊。';
-    if (payload.action === 'taunt') return '大金剛鸚鵡發動嘲諷；居民若在此時攻擊，牠會立刻反擊。';
-    if (payload.action === 'sleep') return `${payload.monsterName}仍在熟睡，沒有攻擊。`;
-    if (payload.monsterName === '大貓爪' && hits.length === 0) return '大貓爪撲擊落空，沒有命中居民。';
-    if (payload.action === 'claw') return results ? `巨龍揮出爪擊：${results}。` : '巨龍揮出爪擊，但沒有居民受擊。';
-    if (payload.action === 'breath') return results ? `巨龍吐息：${results}。` : '巨龍吐息，但沒有居民受擊。';
-    if (payload.action === 'peck') return results ? `大金剛鸚鵡啄擊：${results}。` : '大金剛鸚鵡啄擊，但沒有居民受擊。';
-    if (results) return `怪物${payload.monsterName}發動攻擊：${results}。`;
-    return `怪物${payload.monsterName}發動攻擊，但沒有居民受到傷害。`;
+    if (payload.action === 'flying') return withHpChange('大金剛鸚鵡飛到空中，這回合不會受到攻擊。');
+    if (payload.action === 'taunt') return withHpChange('大金剛鸚鵡發動嘲諷；居民若在此時攻擊，牠會立刻反擊。');
+    if (payload.action === 'sleep') return withHpChange(`${payload.monsterName}仍在熟睡，沒有攻擊。`);
+    if (payload.monsterName === '大貓爪' && hits.length === 0) return withHpChange('大貓爪撲擊落空，沒有命中居民。');
+    if (payload.action === 'claw') return withHpChange(results ? `巨龍揮出爪擊：${results}。` : '巨龍揮出爪擊，但沒有居民受擊。');
+    if (payload.action === 'breath') return withHpChange(results ? `巨龍吐息：${results}。` : '巨龍吐息，但沒有居民受擊。');
+    if (payload.action === 'peck') return withHpChange(results ? `大金剛鸚鵡啄擊：${results}。` : '大金剛鸚鵡啄擊，但沒有居民受擊。');
+    if (results) return withHpChange(`怪物${payload.monsterName}發動攻擊：${results}。`);
+    return withHpChange(`怪物${payload.monsterName}發動攻擊，但沒有居民受到傷害。`);
   }
   if (event.kind === 'boss1-flying-hit-blocked') {
     return `${self ? '你' : '一位居民'}攻擊大金剛鸚鵡，但牠正飛在空中，這次攻擊沒有命中。`;
@@ -199,11 +216,11 @@ export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): stri
     if (self) {
       const counterOutcome = victimEffect ? `牠反擊你；你${victimEffect}`
         : otherVictimEffect ? `牠反擊另一位居民；對方${otherVictimEffect}` : '牠立刻反擊';
-      return `你攻擊大金剛鸚鵡時，牠因嘲諷立刻反擊；你的攻擊沒有生效，${counterOutcome}。`;
+      return withHpChange(`你攻擊大金剛鸚鵡時，牠因嘲諷立刻反擊；你的攻擊沒有生效，${counterOutcome}。`);
     }
-    if (victimEffect) return `大金剛鸚鵡因嘲諷立刻反擊你；你${victimEffect}。`;
-    if (otherVictimEffect) return `大金剛鸚鵡因嘲諷立刻反擊另一位居民；對方${otherVictimEffect}。`;
-    return '大金剛鸚鵡因嘲諷立刻反擊，原本的居民攻擊沒有生效。';
+    if (victimEffect) return withHpChange(`大金剛鸚鵡因嘲諷立刻反擊你；你${victimEffect}。`);
+    if (otherVictimEffect) return withHpChange(`大金剛鸚鵡因嘲諷立刻反擊另一位居民；對方${otherVictimEffect}。`);
+    return withHpChange('大金剛鸚鵡因嘲諷立刻反擊，原本的居民攻擊沒有生效。');
   }
   if (event.kind === 'boss2-defense-breakthrough') {
     const attacker = self ? '你' : '一位居民';
@@ -232,7 +249,11 @@ export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): stri
   if (event.kind === 'corpse-item-scavenged' && self && typeof payload.itemId === 'string') return `你從屍體取得了 ${payload.itemId}。`;
   if (event.kind === 'corpse-carried' && self) return '你搬起了一具屍體。';
   if (event.kind === 'corpse-dropped' && self) return '你放下了攜帶的屍體。';
-  if (event.kind === 'resident-attacked' || event.kind === 'boss1-defeated') return describeResidentAttack(event, actorId, payload);
+  if (event.kind === 'resident-attacked' || event.kind === 'boss1-defeated') {
+    const narrative = describeResidentAttack(event, actorId, payload);
+    return narrative === undefined ? hpChangeText : withHpChange(narrative);
+  }
+  if (hpChangeText !== undefined) return hpChangeText;
   return undefined;
 }
 

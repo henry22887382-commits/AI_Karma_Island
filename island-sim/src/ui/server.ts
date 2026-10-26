@@ -835,6 +835,25 @@ root.addEventListener('keydown', (event) => {
 });
 root.addEventListener('change', async (event) => {
   if (event.target instanceof HTMLSelectElement) rememberPendingSelect(event.target);
+  const controlSetting = event.target.closest('[data-control-setting]');
+  if (controlSetting) {
+    const kind = controlSetting.dataset.controlSetting;
+    const value = Number(controlSetting.value);
+    if (!Number.isFinite(value)) return;
+    controlSetting.disabled = true;
+    showControlFeedback('');
+    try {
+      const response = await fetch('/api/control', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, value }) });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error || '模擬速度設定未完成。');
+      await refresh();
+    } catch (error) {
+      showControlFeedback(error instanceof Error ? error.message : '模擬速度設定未完成。');
+    } finally {
+      if (controlSetting.isConnected) controlSetting.disabled = false;
+    }
+    return;
+  }
   const eventResidentFilter = event.target.closest('select[data-event-resident-filter]');
   if (eventResidentFilter) {
     eventResidentId = eventResidentFilter.value || undefined;
@@ -1770,6 +1789,11 @@ async function handleRequest(
     const body = await readJsonBody(request);
     if (body.kind === 'pause' || body.kind === 'resume') {
       await port.requestControl({ kind: body.kind });
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+    if (body.kind === 'speed' && (body.value === 0.5 || body.value === 1 || body.value === 2)) {
+      await port.requestControl({ kind: 'speed', value: body.value });
       sendJson(response, 200, { ok: true });
       return;
     }

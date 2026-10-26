@@ -13,6 +13,7 @@ export interface RuntimeControlPort {
   getState(): { readonly paused: boolean; readonly speedMultiplier: number; readonly status?: string };
   pause(): void | Promise<void>;
   resume(): void | Promise<void>;
+  setSpeed?(multiplier: number): void;
 }
 
 export interface ObserverLifecyclePort {
@@ -68,11 +69,13 @@ export class SQLiteObserverPort implements ObserverReadPort {
     return { ...projectSnapshot(state, events, this.config, intentEvents), ...(lifecycle ? { lifecycle } : {}) };
   }
 
-  async requestControl(request: { readonly kind: 'pause' | 'resume' }): Promise<void> {
+  async requestControl(request: { readonly kind: 'pause' | 'resume' | 'speed'; readonly value?: number }): Promise<void> {
     const runtime = this.config.control;
     if (!runtime) throw new Error('模擬執行控制器尚未連接。');
     if (request.kind === 'pause') return runtime.pause();
-    return runtime.resume();
+    if (request.kind === 'resume') return runtime.resume();
+    if (!runtime.setSpeed || request.value === undefined) throw new Error('此執行控制器不支援速度調整。');
+    return runtime.setSpeed(request.value);
   }
 }
 
@@ -195,7 +198,7 @@ export function projectSnapshot(state: WorldState, events: readonly WorldEvent[]
     initialized: true,
     ...(unresolved.length ? { unresolved } : {}),
     worldTime: { day: Math.floor(timeT / 72) + 1, timeT: timeT % 72, phase: dayPhaseAt(timeT) === 'day' ? '白天' : '夜晚' },
-    simulation: { running: control ? !control.paused : false, speedLabel: control ? `牆鐘速度 ${control.speedMultiplier} 倍` : '執行控制器尚未連接', freshAt: new Date().toISOString(), controllable: control !== undefined && config.control !== undefined, ...(control?.status ? { status: control.status } : {}) },
+    simulation: { running: control ? !control.paused : false, speedLabel: control ? `模擬倍率 ${control.speedMultiplier} 倍` : '執行控制器尚未連接', ...(control ? { speedMultiplier: control.speedMultiplier } : {}), freshAt: new Date().toISOString(), controllable: control !== undefined && config.control !== undefined, ...(control?.status ? { status: control.status } : {}) },
     map: {
       nodes: nodes.map((node) => ({
         id: node.id,
