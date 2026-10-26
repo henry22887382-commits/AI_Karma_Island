@@ -126,6 +126,17 @@ export function formatAiNarrativeEvent(event: WorldEvent, actorId: string): stri
   if (event.kind === 'resident-arrived' && typeof payload.toNodeId === 'string') {
     return `${subject}抵達了 Node ${payload.toNodeId}。`;
   }
+  if (event.kind === 'coconut-harvested') {
+    if (typeof payload.itemId !== 'string' || typeof payload.stockAfter !== 'number' || !Number.isSafeInteger(payload.stockAfter)
+      || payload.stockAfter < 0 || payload.stockAfter > 3 || event.nodeId === null || !Array.isArray(payload.createdObjectIds)
+      || !payload.createdObjectIds.every((id) => typeof id === 'string')) return undefined;
+    const location = locationNameForNode(event.nodeId, undefined);
+    const place = location ? `Node ${event.nodeId}（${location}）` : `Node ${event.nodeId}`;
+    const dropped = payload.createdObjectIds.length > 0;
+    return dropped
+      ? `${subject}在${place}採收了「${payload.itemId}」，但背包已滿，椰子掉在地上；該處剩餘 ${payload.stockAfter} 個。`
+      : `${subject}在${place}採收並取得「${payload.itemId}」；該處剩餘 ${payload.stockAfter} 個。`;
+  }
   if (event.kind === 'public-message-sent' && typeof payload.recipientId === 'string' && typeof payload.text === 'string') {
     const sender = self ? '你' : subject;
     return `${sender}向${payload.recipientId}發送公開訊息：「${payload.text}」`;

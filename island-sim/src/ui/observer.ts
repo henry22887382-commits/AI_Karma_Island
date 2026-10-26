@@ -465,7 +465,7 @@ function renderTimeline(snapshot: ObserverSnapshot, selection: ObserverSelection
     if (event.visibility !== 'public' && event.visibility !== 'observer') return false;
     if (selection.eventResidentId && event.actorId !== selection.eventResidentId && !event.participantIds?.includes(selection.eventResidentId)) return false;
     return true;
-  });
+  }).sort((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0));
   const pageSize = 6;
   const pageCount = Math.max(1, Math.ceil(selectedEvents.length / pageSize));
   const page = Number.isSafeInteger(selection.eventPage) && selection.eventPage! > 0 ? Math.min(selection.eventPage!, pageCount) : 1;
