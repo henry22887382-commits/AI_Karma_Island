@@ -1,6 +1,6 @@
 import { readCsv } from './csv.ts';
 import type { SurfaceTerrainClassification } from '../domain/model.ts';
-import { allowsDaySurfaceEntryEvents, visualTypeForClassification } from '../domain/node-classification.ts';
+import { allowsDaySurfaceEntryEvents } from '../domain/node-classification.ts';
 
 export const LEGACY_START_BEACH_NODE_IDS = ['1', '8', '13'] as const;
 
@@ -92,7 +92,7 @@ export async function loadIslandGraph(directory: URL): Promise<IslandGraph> {
       id: nodeId,
       surfaceTerrain,
       isStartingLocation,
-      visualType: visualTypeForClassification(surfaceTerrain ?? 'unclassified') ?? '一般地形',
+      visualType: required(row, 'visual_type'),
       daySurfaceEntryEventsEnabled: allowsDaySurfaceEntryEvents(surfaceTerrain),
       label: row.node_label ? row.node_label : null,
       labelStatus: required(row, 'label_status'),

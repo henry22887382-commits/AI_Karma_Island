@@ -7,7 +7,7 @@ test('loads the source graph without deriving edges from the drawing', async () 
 
   assert.equal(graph.nodes.length, 28);
   assert.equal(graph.edges.length, 51);
-  assert.equal(graph.nodes.find((node) => node.id === '1')?.label, null);
+  assert.equal(graph.nodes.find((node) => node.id === '1')?.label, '西營地・西椰子海灘');
   assert.equal(graph.nodes.find((node) => node.id === '1')?.labelStatus, '未逐點命名');
   assert.equal(graph.edges.filter((edge) => edge.kind === 'outer_ring').length, 16);
   const outerRing = new Set(graph.edges.filter((edge) => edge.kind === 'outer_ring').map(({ source, target }) => [source, target].sort((a, b) => Number(a) - Number(b)).join(':')));

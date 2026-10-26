@@ -119,15 +119,18 @@ test('night encounter resolution requires an explicit surface terrain and does n
 test('the island source applies the supplied terrain map and preserves scene categories', async () => {
   const graph = await loadIslandGraph(new URL('../../references/tables/', import.meta.url));
   for (const [terrain, expectedIds] of Object.entries({
-    beach: ['1', '2', '4', '7', '8', '10', '12', '13', '14', '16'],
-    forest: ['9', '11', '17', '18', '23', '25', '28'],
+    beach: ['2', '4', '7', '10', '12', '14', '16'],
+    'coconut-beach': ['1', '8', '13'],
+    forest: ['3', '11', '18', '25', '28'],
+    'berry-forest': ['9', '17', '23'],
     river: ['5', '24', '26'],
-    rock: ['3', '6', '19', '20', '21', '22'],
+    rock: ['6', '19', '20', '22'],
+    'dungeon-entrance': ['21'],
   })) {
     assert.deepEqual(graph.nodes.filter((node) => node.surfaceTerrain === terrain).map((node) => node.id), expectedIds);
   }
   assert.equal(graph.nodes.find(({ id }) => id === '15')?.visualType, '港口');
-  assert.equal(graph.nodes.find(({ id }) => id === '21')?.visualType, '特殊地點');
+  assert.equal(graph.nodes.find(({ id }) => id === '21')?.visualType, '地牢入口');
   assert.equal(graph.nodes.find(({ id }) => id === '25')?.visualType, '中央營地');
 });
 

@@ -44,11 +44,6 @@ function isPriorityMemoryEvent(event: WorldEvent, actorId: string): boolean {
     || (event.kind === 'resident-action-settled' && asRecord(event.payload).actionType === 'sleep');
 }
 
-function safeEventKind(kind: string): string {
-  const safeKind = kind.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48);
-  return safeKind || '未知類型';
-}
-
 function boundResidentMemory(entries: readonly ResidentAiMemoryEntry[]): readonly ResidentAiMemoryEntry[] {
   return [...new Map(entries.map((entry) => [entry.sequence, entry])).values()]
     .sort((left, right) => left.sequence - right.sequence);
@@ -325,12 +320,15 @@ export function buildAiInput(
     ))
     .sort((left, right) => left.sequence - right.sequence);
   const additions: ResidentAiMemoryEntry[] = [];
+  const unresolved: string[] = [];
   for (const event of eligibleEvents) {
     let sentence: string | undefined;
     try { sentence = formatEvent(event, actorId); } catch { sentence = undefined; }
-    const text = sentence?.trim()
-      ? sentence.trim()
-      : `你曾看見一則公開事件（${safeEventKind(event.kind)}），目前沒有可用摘要。`;
+    const text = sentence?.trim();
+    if (!text) {
+      unresolved.push(`event:${event.eventId}:missing-narrative`);
+      continue;
+    }
     additions.push({
       sequence: event.sequence,
       eventId: event.eventId,
@@ -339,6 +337,7 @@ export function buildAiInput(
       importance: isPriorityMemoryEvent(event, actorId) ? 'priority' : 'recent',
     });
   }
+  if (unresolved.length > 0) return { ok: false, unresolved };
   const entries = boundResidentMemory([...memory.entries, ...(arrivalMemory && !memory.entries.some((entry) => entry.kind === 'arrival-memory') ? [arrivalMemory] : []), ...additions]);
   const updatedMemory: ResidentAiMemory = { processedThroughSequence: state.sequence, entries };
 

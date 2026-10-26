@@ -73,7 +73,7 @@ test('read action exposes mapped text only after same-Node settlement', async ()
       sign: { id: 'sign', itemId: '告示牌', objectType: 'item' as const, readableTextId: 'sign-main', ownerActorId: null, nodeId, generatedAtT: 0, expiresAtT: null, unique: false, provisional: false },
     },
   };
-  const content = { foods: [], equipment: [], readableTexts: { 'sign-main': text } };
+  const content = { foods: [], equipment: [], readableTexts: { 'sign-main': text }, readableDocuments: [{ document_id: 'sign-main', pool_type: 'signboard', text }] };
   assert.equal(availableActions(state, actorId, graph, undefined, { foods: [], equipment: [] }).some(({ type }) => type === 'read'), false);
   assert.equal(availableActions(state, actorId, graph, undefined, { foods: [], equipment: [], readableTexts: { 'sign-main': '  \n  ' } }).some(({ type }) => type === 'read'), false);
   const legalActions = availableActions(state, actorId, graph, undefined, content);
@@ -99,6 +99,8 @@ test('production blank book text does not expose READ for a same-Node object', a
   const actorId = 'resident-01';
   const nodeId = initial.actors[actorId]!.nodeId!;
   const content = await loadSimulationActionContent(sourceTables);
+  const blankBook = content.readableDocuments.find((row) => row.pool_type === 'book' && row.text === '');
+  assert.ok(blankBook?.document_id);
   const state = {
     ...initial,
     actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
@@ -106,12 +108,12 @@ test('production blank book text does not expose READ for a same-Node object', a
     }])) as typeof initial.actors,
     objects: {
       ...initial.objects,
-      blankBook: { id: 'blankBook', itemId: '書籍', objectType: 'item' as const, readableTextId: 'book-001', ownerActorId: null, nodeId, generatedAtT: 0, expiresAtT: null, unique: false, provisional: false },
+      blankBook: { id: 'blankBook', itemId: '書籍', objectType: 'item' as const, readableTextId: blankBook.document_id, ownerActorId: null, nodeId, generatedAtT: 0, expiresAtT: null, unique: false, provisional: false },
     },
   };
 
-  assert.equal(content.readableTexts['book-001'], '');
-  assert.equal(availableActions(state, actorId, graph, undefined, content).some(({ type }) => type === 'read'), false);
+  assert.equal(blankBook.text, '');
+  assert.equal(availableActions(state, actorId, graph, undefined, content).some(({ id }) => id === 'read:blankBook'), false);
 });
 
 test('node notice bindings create visible readable signs that are not picked up and persist until destroyed', async () => {
@@ -126,7 +128,7 @@ test('node notice bindings create visible readable signs that are not picked up 
   const state = syncWorldNodeNotices({ ...initial, actors }, [{ node_id: actor.nodeId, document_id: 'notice-test' }]);
   const objectId = `editor-notice-${actor.nodeId}`;
   const loadedContent = await loadSimulationActionContent(sourceTables);
-  const content = { ...loadedContent, readableTexts: { ...loadedContent.readableTexts, 'notice-test': text } };
+  const content = { ...loadedContent, readableTexts: { ...loadedContent.readableTexts, 'notice-test': text }, readableDocuments: [...loadedContent.readableDocuments, { document_id: 'notice-test', pool_type: 'signboard', text }] };
   const actions = availableActions(state, actor.id, graph, undefined, content);
   const read = actions.find((action) => action.id === `read:${objectId}`);
   assert.ok(read);
@@ -1065,7 +1067,7 @@ test('surface rewards honor unique equipment held by any resident', async () => 
       ...initial,
       rngState: candidate,
       actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
-        ...actor, nodeId: actor.id === actorId ? '2' : null, nextActionAtT: actor.id === actorId ? 0 : 100,
+      ...actor, nodeId: actor.id === actorId ? '15' : null, nextActionAtT: actor.id === actorId ? 0 : 100,
       }])),
     }, { actorId, actionId: 'surface:fishing', timeCostT: 3, payload: { surfaceAction: 'fishing' } }, graph, undefined, content);
     return probe.ok && (probe.event.payload as { outcome?: string }).outcome === '勇者下甲';
@@ -1076,7 +1078,7 @@ test('surface rewards honor unique equipment held by any resident', async () => 
     rngState,
     actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
       ...actor,
-      nodeId: actor.id === actorId || actor.id === otherId ? '2' : null,
+      nodeId: actor.id === actorId || actor.id === otherId ? '15' : null,
       nextActionAtT: actor.id === actorId ? 0 : 100,
       ...(actor.id === otherId ? { inventory: ['勇者下甲'] } : {}),
     }])),
@@ -1650,11 +1652,16 @@ test('materializes a long-lived corpse and drops possessions atomically on letha
   if (!result.ok) return;
   assert.equal(result.state.actors[targetId]?.alive, false);
   assert.equal(result.state.actors[targetId]?.nodeId, null);
+  assert.deepEqual(result.state.actors[targetId]?.inventory, []);
+  assert.deepEqual(result.state.actors[targetId]?.equipment, {});
   assert.equal(result.state.privateLifeData?.[targetId]?.biographyStatus, 'pending');
   const corpse = Object.values(result.state.objects).find(({ remainsActorId }) => remainsActorId === targetId);
   assert.ok(corpse);
   assert.equal(corpse.expiresAtT, null);
-  assert.deepEqual(Object.values(result.state.objects).filter(({ corpseId }) => corpseId === corpse.id).map(({ itemId }) => itemId).sort(), ['勇者劍', '珍珠']);
+  const droppedItems = Object.values(result.state.objects).filter(({ corpseId }) => corpseId === corpse.id).map(({ itemId }) => itemId);
+  assert.deepEqual(droppedItems.sort(), ['勇者劍', '珍珠']);
+  assert.equal(droppedItems.filter((itemId) => itemId === '勇者劍').length, 1);
+  assert.equal(droppedItems.filter((itemId) => itemId === '珍珠').length, 1);
 });
 
 test('keeps a moving resident outside both Nodes until the 3T arrival timer', async () => {
@@ -1988,7 +1995,7 @@ test('a wet-slippery-waterway slime blocks dungeon retreat but leaves ordinary i
   const tripId = 'slime-retreat-test';
   const dungeonLocation = { tripId, floor: 2 as const, cellId: 'E' };
   const slimeId = 'wet-slippery-waterway-slime';
-  const currentContent = { ...content, readableTexts: { ...(content.readableTexts ?? {}), 'slime-test-sign': '測試告示牌' } };
+  const currentContent = { ...content, readableTexts: { ...(content.readableTexts ?? {}), 'slime-test-sign': '測試告示牌' }, readableDocuments: [...content.readableDocuments, { document_id: 'slime-test-sign', pool_type: 'signboard', text: '測試告示牌' }] };
   const containerSource = content.containerCategoryWeights?.[0]?.source;
   assert.ok(containerSource);
   const state = {
@@ -2059,6 +2066,7 @@ test('surface monsters never block moving or retreating through their Node', asy
       blocker: { id: 'blocker', actorType: 'monster' as const, alive: true, nodeId: '1', nextActionAtT: 100, speed: 2, unsafeEntryAtT: 0, sleeping: false, hitPoints: 2, defense: 0, attack: 0, name: '夜間蝙蝠' },
     },
     nodes: { ...initial.nodes, '1': { ...initial.nodes['1']!, surfaceTerrain: 'beach' as const } },
+    objects: Object.fromEntries(Object.entries(initial.objects).filter(([, object]) => !(object.itemId === '營火' && object.nodeId === '1'))),
   };
   const actions = availableActions(state, actorId, graph, undefined, content);
   assert.equal(actions.some(({ id }) => id === 'move:1'), true);
@@ -2231,8 +2239,9 @@ test('night movement checks terrain first, then selects and schedules one weight
   assert.ok(edge);
   const fromNodeId = edge.source === targetNodeId ? edge.target : edge.source;
   const targetNode = { ...initial.nodes[targetNodeId]!, surfaceTerrain: 'forest' as const };
-  const encounterSeed = Array.from({ length: 500 }, (_, index) => (index + 1).toString(16).padStart(8, '0'))
-    .find((candidate) => resolveNightEncounterCheck({ node: targetNode, actorId, worldTimeT: 51, randomState: candidate }).encounter);
+  const candidateRngStates = Array.from({ length: 500 }, (_, index) => (Math.imul(index + 1, 0x9e3779b9) >>> 0).toString(16).padStart(8, '0'));
+  const encounterSeed = candidateRngStates
+    .find((candidate) => resolveNightEncounterCheck({ node: targetNode, actorId, worldTimeT: 48, randomState: candidate }).encounter);
   assert.ok(encounterSeed);
   const base = {
     ...initial, worldTimeT: 48, rngState: encounterSeed,
@@ -2303,10 +2312,10 @@ test('night movement checks terrain first, then selects and schedules one weight
   assert.equal(afterMonster.state.actors[actorId]?.hitPoints, advancedRound.state.actors[actorId]?.hitPoints! - hitResult.appliedDamage);
   assert.equal(afterMonster.event.actorId, encounter.spawnedMonsterId);
 
-  const missSeed = Array.from({ length: 500 }, (_, index) => (index + 1).toString(16).padStart(8, '0'))
-    .find((candidate) => !resolveNightEncounterCheck({ node: initial.nodes[targetNodeId], actorId, worldTimeT: 51, randomState: candidate }).encounter);
+  const missSeed = candidateRngStates
+    .find((candidate) => !resolveNightEncounterCheck({ node: initial.nodes[targetNodeId], actorId, worldTimeT: 48, randomState: candidate }).encounter);
   assert.ok(missSeed);
-  assert.equal(resolveNightEncounterCheck({ node: initial.nodes[targetNodeId], actorId, worldTimeT: 51, randomState: missSeed }).encounter, false);
+  assert.equal(resolveNightEncounterCheck({ node: initial.nodes[targetNodeId], actorId, worldTimeT: 48, randomState: missSeed }).encounter, false);
   const missState = {
     ...base, rngState: missSeed,
     objects: { fire: { id: 'unlit-fire', itemId: '營火', lit: false, ownerActorId: null, nodeId: targetNodeId, generatedAtT: 40, expiresAtT: 60, unique: false, provisional: false } },
@@ -2561,8 +2570,8 @@ test('advances through night without a global check and schedules only personal 
   assert.ok(nodeId);
   const unsafeState = {
     ...state,
-    actors: { ...state.actors, [sleeperId]: { ...state.actors[sleeperId]!, sleeping: true, unsafeEntryAtT: 48, nextActionAtT: 80 } },
-    nodes: { ...state.nodes, [nodeId]: { ...state.nodes[nodeId]!, surfaceTerrain: 'beach' as const, safe: false } },
+    actors: { ...state.actors, [sleeperId]: { ...state.actors[sleeperId]!, nodeId: '2', sleeping: true, unsafeEntryAtT: 48, nextActionAtT: 80 } },
+    nodes: { ...state.nodes, '2': { ...state.nodes['2']!, surfaceTerrain: 'beach' as const, safe: false } },
   };
   const riskEvent = nextWorldEvent(unsafeState);
   assert.equal(riskEvent.kind, 'personal-sleep-risk-unresolved');
@@ -2580,7 +2589,7 @@ test('settles unsafe sleep at the current Node rate, applies one fixed HP before
   const actorId = 'resident-01';
   const actor = initial.actors[actorId];
   assert.ok(actor?.nodeId);
-  const node = { ...initial.nodes[actor.nodeId]!, surfaceTerrain: 'beach' as const };
+  const node = { ...initial.nodes['2']!, surfaceTerrain: 'beach' as const };
   const startingRandomState = Array.from({ length: 500 }, (_, index) => (index + 1).toString(16).padStart(8, '0'))
     .find((candidate) => resolveNightEncounterCheck({ node, actorId, worldTimeT: 51, randomState: candidate }).encounter);
   assert.ok(startingRandomState);
@@ -2589,9 +2598,9 @@ test('settles unsafe sleep at the current Node rate, applies one fixed HP before
     worldTimeT: 48,
     rngState: startingRandomState,
     actors: Object.fromEntries(Object.values(initial.actors).map((resident) => [resident.id, resident.id === actorId
-      ? { ...resident, sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 80, hitPoints: 5 }
+      ? { ...resident, nodeId: '2', sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 80, hitPoints: 5 }
       : { ...resident, nextActionAtT: 80 }])),
-    nodes: { ...initial.nodes, [actor.nodeId]: node },
+    nodes: { ...initial.nodes, '2': node },
   };
   const result = settleNextTimerEvent(state, {}, { monsters: content.monsters });
   assert.equal(result.ok, true);
@@ -2604,7 +2613,7 @@ test('settles unsafe sleep at the current Node rate, applies one fixed HP before
   assert.equal(check?.hitPointChange, -1);
   assert.equal(check?.woke, true);
   assert.equal(result.state.actors[check!.spawnedMonsterId]?.name, check?.enemyName);
-  assert.equal(result.state.actors[check!.spawnedMonsterId]?.nodeId, actor.nodeId);
+  assert.equal(result.state.actors[check!.spawnedMonsterId]?.nodeId, '2');
   assert.equal(result.randomDraws.length, 2);
 });
 
@@ -2639,14 +2648,14 @@ test('a lit campfire suppresses the sleeping encounter check, and a lethal encou
   const actorId = 'resident-01';
   const actor = initial.actors[actorId];
   assert.ok(actor?.nodeId);
-  const node = { ...initial.nodes[actor.nodeId]!, surfaceTerrain: 'beach' as const };
+  const node = { ...initial.nodes['2']!, surfaceTerrain: 'beach' as const };
   const campfireState = {
     ...initial, worldTimeT: 48,
-    nodes: { ...initial.nodes, [actor.nodeId]: node },
+    nodes: { ...initial.nodes, '2': node },
     actors: Object.fromEntries(Object.values(initial.actors).map((resident) => [resident.id, resident.id === actorId
-      ? { ...resident, sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 80 }
+      ? { ...resident, nodeId: '2', sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 80 }
       : { ...resident, nextActionAtT: 80 }])),
-    objects: { ...initial.objects, fire: { id: 'fire', itemId: '營火', lit: true, ownerActorId: null, nodeId: actor.nodeId, generatedAtT: 48, expiresAtT: 73, unique: false, provisional: false } },
+    objects: { ...initial.objects, fire: { id: 'fire', itemId: '營火', lit: true, ownerActorId: null, nodeId: '2', generatedAtT: 48, expiresAtT: 73, unique: false, provisional: false } },
   };
   assert.notEqual(nextWorldEvent(campfireState).kind, 'personal-sleep-risk-unresolved');
   const unlitFire = { ...campfireState, objects: { fire: { ...campfireState.objects.fire!, lit: false } } };
@@ -2681,9 +2690,9 @@ test('advances a classified sleep check without using the removed generic-rate f
     ...initial,
     worldTimeT: 48,
     actors: Object.fromEntries(Object.values(initial.actors).map((resident) => [resident.id, resident.id === actorId
-      ? { ...resident, sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 80 }
+      ? { ...resident, nodeId: '2', sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 80 }
       : { ...resident, nextActionAtT: 80 }])),
-    nodes: { ...initial.nodes, [actor.nodeId]: { ...initial.nodes[actor.nodeId]!, safe: false, surfaceTerrain: 'beach' as const } },
+    nodes: { ...initial.nodes, '2': { ...initial.nodes['2']!, safe: false, surfaceTerrain: 'beach' as const } },
   };
   const result = settleNextTimerEvent(state);
   assert.equal(result.ok, true);
@@ -2743,9 +2752,9 @@ test('a generic safe flag does not replace an active campfire for night protecti
     ...initial,
     worldTimeT: 48,
     actors: Object.fromEntries(Object.values(initial.actors).map((resident) => [resident.id, resident.id === actorId
-      ? { ...resident, sleeping: true, unsafeEntryAtT: 48, nextActionAtT: 80 }
+      ? { ...resident, nodeId: '2', sleeping: true, unsafeEntryAtT: 48, nextActionAtT: 80 }
       : { ...resident, nextActionAtT: 80 }])),
-    nodes: { ...initial.nodes, [actor.nodeId]: { ...initial.nodes[actor.nodeId]!, safe: true } },
+    nodes: { ...initial.nodes, '2': { ...initial.nodes['2']!, safe: true } },
   };
   assert.equal(nextWorldEvent(state).kind, 'personal-sleep-risk-unresolved');
 });
@@ -2757,7 +2766,8 @@ test('offers sleep only at night and holds the resident until dawn', async () =>
   const state = {
     ...initial,
     worldTimeT: 48,
-    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, { ...actor, nextActionAtT: actor.id === actorId ? 48 : 80 }])),
+    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, { ...actor, nodeId: actor.id === actorId ? '2' : actor.nodeId, nextActionAtT: actor.id === actorId ? 48 : 80 }])),
+    nodes: { ...initial.nodes, '2': { ...initial.nodes['2']!, surfaceTerrain: 'beach' as const } },
   };
   const actions = availableActions(state, actorId, graph);
   const sleep = actions.find(({ type }) => type === 'sleep');
@@ -2786,20 +2796,26 @@ test('restores sleep to three only after a full night and wakes at the day bound
     worldTimeT: 71,
     actors: {
       ...initial.actors,
-      [actorId]: { ...actor, sleep: 0, hunger: 4, sleeping: true, sleepingSinceT: 48, unsafeEntryAtT: 48, nextActionAtT: 72 },
+      [actorId]: { ...actor, sleep: 2, hunger: 4, sleeping: true, sleepingSinceT: 48, sleepRecoveryBlocks: 2, unsafeEntryAtT: 48, nextActionAtT: 72 },
       ...Object.fromEntries(Object.values(initial.actors).filter(({ id }) => id !== actorId).map((resident) => [resident.id, { ...resident, nextActionAtT: 80 }])),
     },
-    nodes: { ...initial.nodes, [actor.nodeId]: { ...initial.nodes[actor.nodeId]!, safe: true } },
-    objects: { ...initial.objects, fire: { id: 'fire', itemId: '營火', lit: true, ownerActorId: null, nodeId: actor.nodeId, generatedAtT: 48, expiresAtT: 73, unique: false, provisional: false } },
+    nodes: { ...initial.nodes, '2': { ...initial.nodes['2']!, safe: true } },
+    objects: { ...initial.objects, fire: { id: 'fire', itemId: '營火', lit: true, ownerActorId: null, nodeId: '2', generatedAtT: 48, expiresAtT: 73, unique: false, provisional: false } },
   };
-  assert.equal(nextWorldEvent(state).kind, 'day-boundary');
+  assert.equal(nextWorldEvent(state).kind, 'sleep-recovery');
   const result = settleNextTimerEvent(state);
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.state.actors[actorId]?.sleep, 3);
-  assert.equal(result.state.actors[actorId]?.hunger, 3);
-  assert.equal(result.state.actors[actorId]?.sleeping, false);
-  assert.equal(result.state.actors[actorId]?.nextActionAtT, 72);
+  assert.equal(result.state.actors[actorId]?.hunger, 4);
+  assert.equal(result.state.actors[actorId]?.sleeping, true);
+  assert.equal(nextWorldEvent(result.state).kind, 'day-boundary');
+  const dawn = settleNextTimerEvent(result.state);
+  assert.equal(dawn.ok, true);
+  if (!dawn.ok) return;
+  assert.equal(dawn.state.actors[actorId]?.sleeping, false);
+  assert.equal(dawn.state.actors[actorId]?.nextActionAtT, 72);
+  assert.equal(dawn.state.actors[actorId]?.hunger, 3);
 });
 
 test('replaces a dead resident at dawn with a fresh generation in the same slot and current model binding', async () => {
@@ -2844,7 +2860,7 @@ test('replaces a dead resident at dawn with a fresh generation in the same slot 
   assert.equal(replacement.nextActionAtT, 72);
   assert.equal(result.state.actors[dead.id]?.alive, false);
   assert.equal(result.state.objects['corpse-loot-resident-01-1']?.itemId, 'sword');
-  assert.equal(replacement.nodeId === null ? null : result.state.nodes[replacement.nodeId]?.visualType, '海灘類');
+  assert.equal(replacement.nodeId === null ? null : result.state.nodes[replacement.nodeId]?.visualType, '椰子沙灘');
 });
 
 test('replenishes all residents who died in the same night in one dawn batch to ten', async () => {
@@ -2884,7 +2900,7 @@ test('replays the due day-boundary wake after another timer already advanced wor
     ...initial,
     worldTimeT: 72,
     actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, actor.id === sleeperId
-      ? { ...actor, sleeping: true, sleepingSinceT: 48, nextActionAtT: 72 }
+      ? { ...actor, sleeping: true, sleepingSinceT: 48, sleepRecoveryBlocks: 3, nextActionAtT: 72 }
       : { ...actor, nextActionAtT: 100 }])) ,
   };
 

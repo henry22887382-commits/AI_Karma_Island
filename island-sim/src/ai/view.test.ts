@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAiInput, formatAiNarrativeEvent, type AiLegalAction } from './view.ts';
+import { buildModelInput } from './router.ts';
 import type { JsonValue, WorldEvent, WorldState } from '../domain/model.ts';
 
 function payloadText(payload: JsonValue): string | undefined {
@@ -16,8 +17,8 @@ const state: WorldState = {
   seed: 'seed',
   rngState: 'rng',
   actors: {
-    '1.1': { id: '1.1', actorType: 'resident', alive: true, nodeId: '1', nextActionAtT: 49, speed: 1, unsafeEntryAtT: 0, sleeping: false, hitPoints: 20, hunger: 4, sleep: 3, name: '本人', inventory: ['自有蘋果'] },
-    '2.1': { id: '2.1', actorType: 'resident', alive: true, nodeId: '1', nextActionAtT: 52, speed: 1, unsafeEntryAtT: null, sleeping: true, hitPoints: 4, hunger: 0, sleep: 0, name: '另一居民', inventory: ['不可見的物品'] },
+    '1.1': { id: '1.1', actorType: 'resident', alive: true, nodeId: '1', nextActionAtT: 49, speed: 1, unsafeEntryAtT: 0, sleeping: false, hitPoints: 20, hunger: 4, sleep: 3, name: '本人', inventory: ['自有蘋果'], aiMemory: { processedThroughSequence: 0, entries: [] } },
+    '2.1': { id: '2.1', actorType: 'resident', alive: true, nodeId: '1', nextActionAtT: 52, speed: 1, unsafeEntryAtT: null, sleeping: true, hitPoints: 4, hunger: 0, sleep: 0, name: '另一居民', inventory: ['不可見的物品'], aiMemory: { processedThroughSequence: 0, entries: [] } },
     'm.1': { id: 'm.1', actorType: 'monster', alive: true, nodeId: '1', nextActionAtT: 49, speed: 1, unsafeEntryAtT: null, sleeping: false, hitPoints: 99, hunger: 0, sleep: 0, inventory: ['怪物掉落表'] },
     '3.1': { id: '3.1', actorType: 'resident', alive: true, nodeId: '2', nextActionAtT: 49, speed: 1, unsafeEntryAtT: null, sleeping: false, hitPoints: 30, hunger: 5, sleep: 5, inventory: ['遠方私人物品'] },
   },
@@ -87,9 +88,15 @@ test('keeps only the actor life own prior public narration and latest JSON, neve
   const built = buildAiInput({ ...state, sequence: 5 }, '1.1', legalActions, [ownAction, privateAction], formatAiNarrativeEvent);
   assert.equal(built.ok, true);
   if (!built.ok) return;
-  assert.match(built.input.narration, /你記得此前親身經歷的事情/);
   assert.match(built.input.narration, /你等待了/);
   assert.doesNotMatch(built.input.narration, /本人私下意圖/);
+  const next = buildAiInput({ ...state, sequence: 5 }, '1.1', legalActions, [], formatAiNarrativeEvent, built.memory);
+  assert.equal(next.ok, true);
+  if (!next.ok) return;
+  const rememberedPrompt = buildModelInput(next.input);
+  assert.match(rememberedPrompt, /你記得曾觀察到的公開事件：/);
+  assert.match(rememberedPrompt, /你等待了/);
+  assert.doesNotMatch(rememberedPrompt, /本人私下意圖/);
   assert.equal(built.input.snapshot.worldTimeT, undefined);
   assert.equal((built.input.snapshot.available_actions as readonly unknown[]).length, legalActions.length);
 });
@@ -103,12 +110,12 @@ test('provides the previous monster action outcome to an AI on the same Node', (
   const monsterAction: WorldEvent = {
     eventId: 'monster-action-1', sequence: 4, worldTimeT: 49, actorId: 'm.1', nodeId: '1',
     kind: 'monster-action-settled', visibility: 'public',
-    payload: { monsterName: '森林野豬', action: 'attack', hits: [{ targetId: '1.1', appliedDamage: 2, hitPointsAfter: 18, killed: false }] },
+    payload: { monsterName: '森林野豬', action: 'attack', hits: [{ targetId: '1.1', appliedDamage: 2, targetHitPointsBefore: 20, hitPointsAfter: 18, killed: false }] },
     randomDraws: [],
   };
   const built = buildAiInput({ ...state, sequence: 4 }, '1.1', legalActions, [monsterAction], formatAiNarrativeEvent);
   assert.equal(built.ok, true);
-  if (built.ok) assert.match(built.input.narration, /森林野豬發動了攻擊：1\.1受到2點傷害/);
+  if (built.ok) assert.match(built.input.narration, /怪物森林野豬發動攻擊：你實際扣除 2 點餘命/);
 });
 
 test('shows a public message to the named same-Node recipient on their next action', () => {

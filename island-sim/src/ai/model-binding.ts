@@ -14,11 +14,11 @@ export function currentPriceForBinding(binding: ModelBinding | null, slots: read
     return { ok: false, unresolved: 'Model identity is not bound for this resident life.' };
   }
   const matches = slots.filter((slot) => slot.provider === binding.provider && slot.model === binding.model);
-  if (matches.length === 0) return { ok: true, price: null };
+  if (matches.length === 0) return { ok: false, unresolved: 'No current price is configured for the bound provider/model identity.' };
   const priced = matches.filter((slot) => slot.inputUsdPerMillion !== null && slot.outputUsdPerMillion !== null);
-  if (priced.length === 0) return { ok: true, price: null };
+  if (priced.length === 0) return { ok: false, unresolved: 'Current input and output rates are required before an AI call can be budgeted.' };
   const rates = new Set(priced.map((slot) => `${slot.inputUsdPerMillion}:${slot.outputUsdPerMillion}`));
-  if (rates.size > 1) return { ok: true, price: null };
+  if (rates.size > 1) return { ok: false, unresolved: 'Conflicting current prices exist for the bound provider/model identity.' };
   const latest = priced.reduce((newest, slot) => (slot.updatedAt ?? '') > (newest.updatedAt ?? '') ? slot : newest);
   return {
     ok: true,

@@ -27,10 +27,10 @@ export class BudgetedModelProvider implements ModelProvider {
   async complete(prompt: string, maxOutputTokens: number, context: ProviderCallContext = { operation: 'action', retry: false }): Promise<ProviderCompletion> {
     if (!this.ready) throw new ProviderBudgetBlockedError('模型輸入價格或 token 上限未正確設定。');
     const now = this.clock();
-    const calculatedMaximumUsd = (
+    const maximumUsd = (
       this.pricing.maxInputTokens * this.pricing.inputUsdPerMillionTokens
+      + maxOutputTokens * this.pricing.outputUsdPerMillionTokens
     ) / 1_000_000;
-    const maximumUsd = calculatedMaximumUsd;
     const requestId = randomUUID();
     const reservation = await this.ledger.reserveCost({
       requestId,
@@ -45,11 +45,11 @@ export class BudgetedModelProvider implements ModelProvider {
     try {
       completion = await this.inner.complete(prompt, maxOutputTokens, context);
     } catch {
-      await this.recordUnknown(requestId, reservation.reservationId, undefined, now, context);
+      await this.recordUnknown(requestId, undefined, now, context);
       throw new Error('模型服務傳輸失敗。');
     }
     if (completion.actualCostUsd === undefined) {
-      await this.recordUnknown(requestId, reservation.reservationId, completion.usage, now, context);
+      await this.recordUnknown(requestId, completion.usage, now, context);
       return completion;
     }
     const settled = await this.settle(reservation.reservationId, completion, now, context);
@@ -74,14 +74,14 @@ export class BudgetedModelProvider implements ModelProvider {
     return this.ledger.settleCost({ reservationId, actualUsd, record });
   }
 
-  private async recordUnknown(requestId: string, reservationId: string, usage: ProviderCompletion['usage'], now: Date, context: ProviderCallContext): Promise<void> {
+  private async recordUnknown(requestId: string, usage: ProviderCompletion['usage'], now: Date, context: ProviderCallContext): Promise<void> {
     if (!this.ledger.recordUnpricedCost) throw new Error('Durable unknown-cost accounting is unavailable.');
     const category: CostRecord['category'] = context.retry ? 'retry'
       : context.operation !== 'action' ? context.operation : 'prompt';
     await this.ledger.recordUnpricedCost({
       requestId, providerId: this.id, category,
       inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null,
-      recordedAt: now.toISOString(), reservationId,
+      recordedAt: now.toISOString(),
     });
   }
 }

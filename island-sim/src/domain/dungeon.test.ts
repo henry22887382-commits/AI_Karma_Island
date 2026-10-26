@@ -124,7 +124,8 @@ test('all seven container sources have valid category and subpool totals matchin
       for (const item of items) {
         const effective = effectiveRates.find((row) => row.source === source && row.item === item.item);
         assert.ok(effective, `${source}/${item.item} has an effective rate`);
-        assert.equal(Number(effective.effective_percent), Number(category.category_percent) * Number(item.within_category_percent) / 100);
+        const calculatedPercent = Number(category.category_percent) * Number(item.within_category_percent) / 100;
+        assert.equal(Number(effective.effective_percent), Number(calculatedPercent.toFixed(10)));
       }
     }
   }

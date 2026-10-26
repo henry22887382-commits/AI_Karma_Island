@@ -140,7 +140,7 @@ test('serves the observer page, real snapshot API and strict runtime-only contro
     const result = await response.json() as { markup: string };
     assert.match(result.markup, /島民 resident-01/);
     assert.match(result.markup, /尚待設定/);
-    assert.match(result.markup, /data-control="resume" disabled>恢復/);
+    assert.doesNotMatch(result.markup, /data-control="(?:pause|resume)"/, 'the observer must not render runtime controls when no lifecycle control port exists');
     const dungeonViewResponse = await fetch(`${baseUrl}/api/observer?mapView=dungeon&dungeonFloor=2&dungeonCellId=B2`);
     const dungeonView = await dungeonViewResponse.json() as { markup: string };
     assert.match(dungeonView.markup, /<option value="dungeon" selected>地牢<\/option>/);
@@ -184,7 +184,7 @@ test('saves model settings over HTTP while keeping the API key out of persistenc
     assert.deepEqual(settings.readSlots()[0], {
       slotId: 1, provider: 'Local test provider', baseUrl: 'http://127.0.0.1:9999/v1', model: 'test-model',
       fallbackModels: ['test-fallback'], inputUsdPerMillion: 0, outputUsdPerMillion: 0,
-      maxInputTokens: 1000, maxContextCharacters: 12000, maxOutputTokens: 200, modelSizeB: 8, sizeAtLeast8BConfirmed: true, styleDescription: '測試用謹慎風格', updatedAt: settings.readSlots()[0]?.updatedAt,
+      maxInputTokens: 1000, maxContextCharacters: 12000, maxOutputTokens: null, modelSizeB: null, sizeAtLeast8BConfirmed: false, styleDescription: '測試用謹慎風格', updatedAt: settings.readSlots()[0]?.updatedAt,
       credentialRef: settings.readSlots()[0]?.credentialRef,
     });
     const credentialRef = settings.readSlots()[0]?.credentialRef;
@@ -193,7 +193,7 @@ test('saves model settings over HTTP while keeping the API key out of persistenc
     const readback = await fetch(`${baseUrl}/api/observer`);
     const readbackBody = await readback.text();
     assert.doesNotMatch(readbackBody, new RegExp(secret));
-    assert.match(readbackBody, /OpenAI-compatible Chat Completions/);
+    assert.match(readbackBody, /Local test provider/);
     assert.match(readbackBody, /test-model/);
     assert.match(readbackBody, /測試用謹慎風格/);
   } finally {

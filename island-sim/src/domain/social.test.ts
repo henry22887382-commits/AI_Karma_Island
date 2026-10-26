@@ -67,8 +67,10 @@ test('gift immediately transfers one owned item atomically and respects destinat
   assert.deepEqual(gift.inventoryByActorId, { a: [], b: ['book'] });
   const full = actor('b', 'n1', Array.from({ length: 10 }, (_, index) => `item-${index}`));
   const denied = resolveGift({ giver: actor('a', 'n1', ['book']), recipient: full, itemId: 'book', worldTimeT: 9 });
-  assert.deepEqual(denied.inventoryByActorId, {});
-  assert.equal(denied.unresolved[0]?.sourceId, 'gift-capacity');
+  assert.deepEqual(denied.inventoryByActorId, { a: [] });
+  assert.deepEqual(denied.groundDrop, { itemId: 'book', nodeId: 'n1' });
+  assert.equal(denied.events[0]?.kind, 'gift-dropped');
+  assert.deepEqual(denied.unresolved, []);
 });
 
 test('unique-item transfer requires authoritative owner data and returns an atomic owner update', () => {

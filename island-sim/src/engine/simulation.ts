@@ -341,7 +341,7 @@ function appendReadAndContainerActions(
     const hasBoundText = typeof object.readableText === 'string' && object.readableText.trim().length > 0
       && (object.itemId !== '告示牌' || object.readableTextId == null);
     const hasMappedText = typeof object.readableTextId === 'string' && Boolean(mappedReadableTextForItem(actionContent, object.itemId, object.readableTextId)?.trim());
-    const hasPoolText = pool !== null && pool !== 'signboard' && readablePoolDocuments(actionContent, pool).length > 0;
+    const hasPoolText = object.readableTextId == null && pool !== null && pool !== 'signboard' && readablePoolDocuments(actionContent, pool).length > 0;
     if (!hasBoundText && !hasMappedText && !hasPoolText) continue;
     actions.push({ id: `read:${object.id}`, type: 'read', name: `閱讀${object.itemId ?? '物件'}`, costT: 1, requiresText: false, payload: { objectId: object.id }, payloadSchemaKey: 'world-object-id' });
   }
@@ -350,7 +350,7 @@ function appendReadAndContainerActions(
     const pool = fixedReadablePoolForItem(item.itemId);
     const hasText = (Boolean(item.readableText?.trim()) && (item.itemId !== '告示牌' || item.readableTextId == null))
       || (typeof item.readableTextId === 'string' && Boolean(mappedReadableTextForItem(actionContent, item.itemId, item.readableTextId)?.trim()))
-      || (pool !== null && pool !== 'signboard' && readablePoolDocuments(actionContent, pool).length > 0);
+      || (item.readableTextId == null && pool !== null && pool !== 'signboard' && readablePoolDocuments(actionContent, pool).length > 0);
     if (!hasText) continue;
     actions.push({ id: `read-inventory:${item.instanceId}`, type: 'read', name: `閱讀背包中的${item.itemId}`, costT: 1, requiresText: false, payload: { readableInstanceId: item.instanceId }, payloadSchemaKey: 'world-object-id' });
   }
@@ -1514,6 +1514,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     }
     const updatedTarget = {
       ...applyActorHit(target, struck.hitPoints, schedule.timeT),
+      ...(!struck.alive ? { diedAtT: schedule.timeT, nodeId: null, inventory: [], equipment: {} } : {}),
     };
     let actorsAfterAction: Record<string, WorldActor> = { ...state.actors, [actor.id]: attacker, [target.id]: updatedTarget };
     if (boss1MovedParticipantIds.length > 0 && dungeonRuntime !== undefined) {
@@ -1798,7 +1799,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
     ...actor,
     nodeId: toNodeId,
     ...(action.type === 'retreat' ? { routeHistory: (actor.routeHistory ?? []).slice(0, -1) } : moving ? { routeHistory: [...(actor.routeHistory ?? []), fromNodeId] } : actor.routeHistory === undefined ? {} : { routeHistory: actor.routeHistory }),
-    unsafeEntryAtT: moving ? schedule.timeT : actor.unsafeEntryAtT,
+    unsafeEntryAtT: sleeping ? actor.unsafeEntryAtT ?? schedule.timeT : moving ? schedule.timeT : actor.unsafeEntryAtT,
     travel: null,
     nextActionAtT: wakeAtT ?? schedule.timeT + action.costT,
     sleeping,

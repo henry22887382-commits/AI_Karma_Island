@@ -16,14 +16,14 @@ const snapshot: ObserverSnapshot = {
   biographies: [{ residentId: '0.1', displayName: '已故居民', text: '一段只供玩家查看的傳記' }],
 };
 
-test('renders a readonly observer map, resident detail, objective timeline and player biography', () => {
+test('renders the readonly observer map, resident detail, timeline and death-summary entry point', () => {
   const html = renderObserverMarkup(snapshot);
   assert.match(html, /主島地圖/);
-  assert.match(html, /viewBox="0 0 991 823"/);
+  assert.match(html, /viewBox="0 0 1300 823"/);
   assert.match(html, /未逐點命名/);
   assert.match(html, /島民 1\.1/);
   assert.match(html, /事件時間線/);
-  assert.match(html, /只供玩家查看的傳記/);
+  assert.match(html, /tab-death-summaries/);
   assert.match(html, /資料更新/);
 });
 
@@ -43,10 +43,11 @@ test('keeps pending setup, initialization and synchronization status in error re
   const errorPanelEnd = html.indexOf('</section>', errorPanelStart);
   assert.ok(errorPanelStart >= 0 && errorPanelEnd > errorPanelStart);
   assert.match(html.slice(errorPanelStart, errorPanelEnd), /資料同步正常/);
-  assert.match(html.slice(errorPanelStart, errorPanelEnd), /<details class="readiness-menu"><summary[^>]*>.*?待處理.*?2/);
+  assert.match(html.slice(errorPanelStart, errorPanelEnd), /<details id="readiness-pending" class="readiness-menu">/);
+  assert.match(html.slice(errorPanelStart, errorPanelEnd), /aria-label="展開 2 項待處理提示"/);
+  assert.match(html.slice(errorPanelStart, errorPanelEnd), /<span class="readiness-count">2<\/span>/);
   assert.match(html.slice(errorPanelStart, errorPanelEnd), /世界尚未初始化/);
   assert.match(html.slice(errorPanelStart, errorPanelEnd), /居民模型尚未配置/);
-  assert.match(html.slice(headerStart, headerEnd), /data-control="pause"/);
   assert.doesNotMatch(renderObserverMarkup(snapshot), /class="readiness-menu"/);
   assert.match(html, /id="panel-settings"[\s\S]*?<footer class="freshness">/);
 });
@@ -67,9 +68,9 @@ test('shows the snapshot-backed island and resident summary until a node or resi
   assert.match(emptyHtml, /id="world-side-panel-events"[^>]*aria-labelledby="world-side-tab-events"[^>]*hidden/);
   assert.doesNotMatch(emptyHtml, /尚未選取 · 點擊地圖查看資訊/);
   const selectedHtml = renderObserverMarkup(snapshot, { nodeId: '1' });
-  assert.match(selectedHtml, /<details class="world-side-details" open><summary>選取資訊 · Node 1/);
-  assert.match(selectedHtml, /<h2 id="detail-title">Node 1<\/h2>/);
-  assert.match(selectedHtml, /最近島上事件/);
+  assert.match(selectedHtml, /class="world-node-scene"/);
+  assert.match(selectedHtml, /id="node-scene-title"/);
+  assert.match(selectedHtml, /此地存活居民/);
 });
 
 test('resident tab shows the real roster overview instead of a stale node or invalid-resident empty card', () => {
@@ -83,7 +84,7 @@ test('resident tab shows the real roster overview instead of a stale node or inv
   const residentSnapshot = { ...snapshot, residents: tenResidents };
   const staleNodeMarkup = renderObserverMarkup(residentSnapshot, { activeTab: 'residents', nodeId: 'removed-node' });
   const residentsPanel = staleNodeMarkup.match(/<section class="tab-panel" role="tabpanel" id="panel-residents"[\s\S]*?<\/section><section class="tab-panel" role="tabpanel" id="panel-history"/)?.[0] ?? '';
-  assert.match(residentsPanel, /<span class="count">10 位<\/span>/);
+  assert.match(residentsPanel, /<span class="count" data-resident-search-count>10 位<\/span>/);
   assert.match(residentsPanel, /id="resident-overview-title">居民分布與行動/);
   assert.match(residentsPanel, /居民記錄<\/dt><dd>10/);
   assert.match(residentsPanel, /現有行動 1/);
@@ -97,14 +98,13 @@ test('resident tab shows the real roster overview instead of a stale node or inv
   assert.match(residentsPanel, /data-tab="detail"/);
 });
 
-test('history page paginates all filtered events and has mobile timeline and biography tabs', () => {
+test('history page paginates all filtered events in the current timeline workspace', () => {
   const event = snapshot.events[0];
   assert.ok(event);
   const events = Array.from({ length: 13 }, (_, index) => ({ ...event, id: `event-${index + 1}`, description: `歷史事件 ${index + 1}` }));
   const html = renderObserverMarkup({ ...snapshot, events }, { activeTab: 'history' });
-  assert.match(html, /id="history-workspace-tabs"/);
-  assert.match(html, /data-tab="timeline"/);
-  assert.match(html, /data-tab="biographies"/);
+  assert.match(html, /<div class="history-grid"><section class="panel timeline-panel"/);
+  assert.match(html, /aria-label="歷史事件分頁"/);
   assert.match(html, /第 1 頁，共 3 頁 · 13 筆事件/);
   assert.match(html, /data-history-page="1"/);
   assert.match(html, /data-history-page="2" hidden/);
@@ -115,14 +115,14 @@ test('history page paginates all filtered events and has mobile timeline and bio
 test('fits the desktop map and sidebar to the viewport, with natural vertical flow on small screens', async () => {
   const css = await readFile(new URL('./observer.css', import.meta.url), 'utf8');
   assert.match(css, /\.observer-shell\s*\{[^}]*height:\s*100dvh[^}]*overflow:\s*hidden/);
-  assert.match(css, /\.tab-panel#panel-world\s*\{\s*overflow:\s*hidden/);
+  assert.match(css, /\.tab-panel#panel-world\s*\{\s*overflow:\s*auto/);
   assert.match(css, /\.world-map-column\s*\{\s*grid-column:\s*span 8/);
   assert.match(css, /\.world-side-column\s*\{\s*grid-column:\s*span 4/);
   assert.match(css, /\.map-viewport\s*\{[^}]*flex:\s*1 1 auto[^}]*min-height:\s*0/);
   assert.match(css, /\.island-map\s*\{[^}]*height:\s*100%[^}]*max-height:\s*none/);
   assert.match(css, /\.world-side-tabs\s*\{\s*display:\s*flex/);
   assert.doesNotMatch(css.match(/\.island-node-list\s*\{[^}]*\}/)?.[0] ?? '', /max-height|overflow:\s*auto/);
-  assert.match(css, /\.observer-shell \{ min-height: 100dvh; height: auto; overflow: visible;/);
+  assert.match(css, /\.observer-shell:not\(\[data-active-tab="setup"\]\):not\(\[data-active-tab="residents"\]\):not\(\[data-active-tab="history"\]\):not\(\[data-active-tab="settings"\]\) \{ min-height: 680px; height: auto; overflow: visible; \}/);
   assert.match(css, /\.tab-panel, \.tab-panel#panel-world \{ flex: none; overflow: visible; \}/);
 });
 
@@ -138,7 +138,7 @@ test('binds the generated observer tabs directly and restores bindings after ref
   const server = await readFile(new URL('./server.ts', import.meta.url), 'utf8');
   assert.match(server, /root\.querySelectorAll\('\[role="tablist"\] \[role="tab"\]'\)/);
   assert.match(server, /button\.addEventListener\('click',[\s\S]*?activateTab\(button\)/);
-  assert.match(server, /root\.innerHTML = result\.markup;\s*bindTabButtons\(\);/);
+  assert.match(server, /root\.innerHTML = result\.markup;[\s\S]*?bindTabButtons\(\);/);
   assert.match(server, /candidate\.setAttribute\('aria-selected', String\(selected\)\)/);
   assert.match(server, /panel\.hidden = tablist\.dataset\.responsiveTabs === 'mobile'/);
 });
@@ -175,7 +175,7 @@ test('shows only the 20 most recent resident intents while retaining the full ob
   const html = renderObserverMarkup({ ...snapshot, residents: [{ ...resident, intents }] }, { residentId: '1.1' });
   assert.match(html, /居民 AI 意圖（最近 20 則，共 25 則）/);
   assert.doesNotMatch(html, /意圖 1、|意圖 5、/);
-  assert.match(html, /意圖 6、意圖 7/);
+  assert.match(html, /意圖 6/);
   assert.match(html, /&lt;最後意圖&gt;/);
   assert.doesNotMatch(html, /<最後意圖>/);
 });
@@ -214,7 +214,7 @@ test('renders the selectable dungeon floors from runtime topology and labels res
   assert.match(html, /data-dungeon-cell="B2"/);
   assert.match(html, /居民 1\.1/);
   assert.match(html, /data-dungeon-cell="S"[\s\S]*?data-dungeon-cell="A1"/);
-  assert.match(html, /切換地圖只改變觀察視圖，不影響居民所在位置或模擬/);
+  assert.match(html, /不代表行動順序/);
   assert.doesNotMatch(html, /data-node-id="1"/);
 });
 
@@ -233,19 +233,16 @@ test('falls back to active dungeon floor when the requested floor is unavailable
   assert.match(html, /第二層 · 溫泉下水道格子拓撲/);
 });
 
-test('escapes untrusted event and biography text before placing it in the DOM', () => {
+test('escapes untrusted event and diagnostic text before placing it in the DOM', () => {
   const event = snapshot.events[0];
-  const biography = snapshot.biographies[0];
   assert.ok(event);
-  assert.ok(biography);
   const html = renderObserverMarkup({
     ...snapshot,
     events: [{ ...event, description: '<script>alert(1)</script>' }],
-    biographies: [{ ...biography, text: '<img src=x onerror=alert(1)>' }],
-  });
+  }, {}, { slots: [], latestAiFormatError: { recordedAt: 'now', actorId: 'resident-01', reason: '<img src=x>', rawOutput: '<img src=x onerror=alert(1)>' } });
   assert.doesNotMatch(html, /<script>|<img /);
   assert.match(html, /&lt;script&gt;/);
-  assert.match(html, /&lt;img/);
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
 });
 
 test('keeps model slot editing focused and hides estimate-only amounts', () => {
@@ -257,7 +254,7 @@ test('keeps model slot editing focused and hides estimate-only amounts', () => {
   assert.doesNotMatch(html, /可用額度|月上限/);
   assert.doesNotMatch(html, /模型規模（B）|sizeAtLeast8BConfirmed|已聲明至少8B/);
   assert.match(html, /費率與帳務/);
-  assert.match(html, /請求參數/);
+  assert.match(html, /上下文字元上限/);
   assert.match(html, /居民風格/);
   assert.match(html, /目前沒有其他已設定模型槽位/);
   assert.match(html, /data-model-search/);
@@ -271,7 +268,7 @@ test('keeps model slot editing focused and hides estimate-only amounts', () => {
   assert.match(html, /data-create-openrouter-key/);
   assert.match(html, /實際金額未提供|尚未讀取供應商模型與費率/);
   assert.match(html, /id="model-section-tabs-1"/);
-  for (const section of ['connection', 'style', 'runtime', 'billing']) assert.match(html, new RegExp(`data-tab="${section}"`));
+  for (const section of ['connection', 'style', 'billing']) assert.match(html, new RegExp(`data-tab="${section}"`));
   assert.match(html, /name="apiKey" type="password"/);
 });
 
@@ -306,7 +303,7 @@ test('resident observation allocates more desktop width to useful roster and ove
 test('model settings use normal document flow and responsive fields without an inner scrolling panel', async () => {
   const css = await readFile(new URL('./observer.css', import.meta.url), 'utf8');
   const server = await readFile(new URL('./server.ts', import.meta.url), 'utf8');
-  assert.match(css, /\.observer-shell\[data-active-tab="settings"\] \{ width: min\(1760px, 100%\); min-height: 100dvh; height: auto; padding-inline: clamp\(12px, 1\.5vw, 28px\); padding-bottom: clamp\(24px, 3vh, 36px\); overflow: visible; \}/);
+  assert.match(css, /\.observer-shell\[data-active-tab="settings"\] \{ min-height: 100dvh; height: auto; padding-bottom: clamp\(24px, 3vh, 36px\); overflow: visible; \}/);
   assert.match(css, /\.observer-shell\[data-active-tab="settings"\] \.tab-panel#panel-settings \{ flex: 0 0 auto; overflow: visible; \}/);
   assert.match(css, /\.model-settings-panel > \.panel-heading \{ padding-inline: var\(--space-3\); \}/);
   assert.match(css, /\.settings-toolbar \{[^}]*margin: 8px var\(--space-3\); padding: 10px 0;/);
@@ -327,12 +324,12 @@ test('model settings use normal document flow and responsive fields without an i
   assert.match(css, /\.model-section-tabs \[role="tab"\]\[aria-selected="true"\]/);
   assert.match(css, /\.history-pager/);
   assert.match(css, /\.observer-shell\[data-active-tab="residents"\], \.observer-shell\[data-active-tab="history"\] \{ min-height: 100dvh; height: auto; overflow: visible; \}/);
-  assert.match(css, /\.observer-shell\[data-active-tab="settings"\] \{ width: min\(1760px, 100%\); min-height: 100dvh; height: auto; padding-inline: clamp\(12px, 1\.5vw, 28px\); padding-bottom: clamp\(24px, 3vh, 36px\); overflow: visible; \}/);
+  assert.match(css, /\.observer-shell\[data-active-tab="settings"\] \{ min-height: 100dvh; height: auto; padding-bottom: clamp\(24px, 3vh, 36px\); overflow: visible; \}/);
   assert.match(css, /\.responsive-workspace-tabs/);
   assert.match(server, /shell\.dataset\.activeTab = tab/);
   assert.match(server, /fields\.getAll\('fallbackModels'\)\.map\(String\)\.join\(', '\)/);
   assert.match(server, /option\.value\.toLowerCase\(\)\.includes\(query\)/);
   assert.match(server, /option\.dataset\.inputPrice/);
-  assert.match(server, /if \(activeTab !== 'settings'\) void refresh\(\)/);
+  assert.match(server, /if \(!document\.hidden && activeTab !== 'settings'\) void refresh\(\{ background: true \}\)/);
   assert.doesNotMatch(css.match(/\.model-settings-panel \{[^}]*\}/)?.[0] ?? '', /height|max-height|overflow:\s*auto/);
 });

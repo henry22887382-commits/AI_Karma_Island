@@ -1,19 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadIslandGraph } from '../content/island.ts';
-import { createInitialWorld, projectWorld, START_BEACH_NODE_IDS, syncWorldNodeMetadataFromGraph, syncWorldNodeNotices } from './world.ts';
+import { createInitialWorld, projectWorld, startingLocationNodeIds, syncWorldNodeMetadataFromGraph, syncWorldNodeNotices } from './world.ts';
 
 const sourceTables = new URL('../../references/tables/', import.meta.url);
 
 test('creates ten residents at seeded non-adjacent source beach choices and records their placement draws', async () => {
   const graph = await loadIslandGraph(sourceTables);
+  const startIds = startingLocationNodeIds(graph.nodes);
   const state = createInitialWorld(graph, { seed: 'run-2026-10-20-a', contentVersion: 'archive-01669CAC' });
   const replay = createInitialWorld(graph, { seed: 'run-2026-10-20-a', contentVersion: 'archive-01669CAC' });
   const residents = Object.values(state.actors);
   assert.equal(residents.length, 10);
   assert.ok(residents.every((resident) => resident.actorType === 'resident' && resident.alive));
   assert.ok(residents.every((resident) => resident.hitPoints === 30 && resident.hunger === 5 && resident.sleep === 3));
-  assert.ok(residents.every((resident) => START_BEACH_NODE_IDS.includes(resident.nodeId as typeof START_BEACH_NODE_IDS[number]) && resident.modelId === null));
+  assert.ok(residents.every((resident) => startIds.includes(resident.nodeId ?? '') && resident.modelId === null));
   assert.equal(state.bootstrapRandomDraws?.length, 10);
   assert.deepEqual(state.bootstrapRandomDraws, replay.bootstrapRandomDraws);
   assert.deepEqual(residents.map(({ nodeId }) => nodeId), Object.values(replay.actors).map(({ nodeId }) => nodeId));
@@ -48,15 +49,17 @@ test('starts a new game on the uniform map terrain matrix', async () => {
   assert.doesNotThrow(() => createInitialWorld(graph, { seed: 'uniform-map-terrain', contentVersion: 'test-source' }));
 });
 
-test('selected starting beach IDs are beach nodes with no direct edges between them', async () => {
+test('configured starting location IDs are beach-terrain nodes with no direct edges between them', async () => {
   const graph = await loadIslandGraph(sourceTables);
-  const beaches = new Map(graph.nodes.map((node) => [node.id, node.visualType]));
-  assert.ok(START_BEACH_NODE_IDS.every((id) => beaches.get(id) === '海灘類'));
+  const startIds = startingLocationNodeIds(graph.nodes);
+  const terrainById = new Map(graph.nodes.map((node) => [node.id, node.surfaceTerrain]));
+  assert.ok(startIds.length > 0);
+  assert.ok(startIds.every((id) => ['beach', 'coconut-beach'].includes(terrainById.get(id) ?? '')));
   const edges = new Set(graph.edges.map(({ source, target }) => [source, target].sort((a, b) => Number(a) - Number(b)).join(':')));
-  for (let left = 0; left < START_BEACH_NODE_IDS.length; left += 1) {
-    for (let right = left + 1; right < START_BEACH_NODE_IDS.length; right += 1) {
-      const a = START_BEACH_NODE_IDS[left] as string;
-      const b = START_BEACH_NODE_IDS[right] as string;
+  for (let left = 0; left < startIds.length; left += 1) {
+    for (let right = left + 1; right < startIds.length; right += 1) {
+      const a = startIds[left] as string;
+      const b = startIds[right] as string;
       assert.equal(edges.has([a, b].sort((x, y) => Number(x) - Number(y)).join(':')), false);
     }
   }
@@ -97,21 +100,21 @@ test('syncs only source-backed Node metadata into a snapshot without resetting s
 
   const result = syncWorldNodeMetadataFromGraph(stale, graph);
 
-  assert.deepEqual(result.changedNodeIds, ['6', '11', '15', '19', '20', '22', '25', '26', '27']);
-  assert.equal(result.state.nodes['11']?.label, '森林');
+  assert.deepEqual(result.changedNodeIds, ['6', '11', '15', '19', '20', '22', '25', '26']);
+  assert.equal(result.state.nodes['11']?.label, '河口森林');
   assert.equal(result.state.nodes['11']?.surfaceTerrain, 'forest');
-  assert.equal(result.state.nodes['6']?.label, 'Node 6');
-  assert.equal(result.state.nodes['22']?.label, 'Node 22');
+  assert.equal(result.state.nodes['6']?.label, '北岸石堆');
+  assert.equal(result.state.nodes['22']?.label, '東北石堆');
   assert.equal(result.state.nodes['6']?.surfaceTerrain, 'rock');
   assert.equal(result.state.nodes['22']?.surfaceTerrain, 'rock');
-  assert.equal(result.state.nodes['19']?.label, 'Node 19');
-  assert.equal(result.state.nodes['20']?.label, 'Node 20');
-  assert.equal(result.state.nodes['26']?.label, 'Node 26');
+  assert.equal(result.state.nodes['19']?.label, '西脊石坡');
+  assert.equal(result.state.nodes['20']?.label, '北坡石山');
+  assert.equal(result.state.nodes['26']?.label, '林畔河灘');
   assert.equal(result.state.nodes['19']?.surfaceTerrain, 'rock');
   assert.equal(result.state.nodes['20']?.surfaceTerrain, 'rock');
   assert.equal(result.state.nodes['26']?.surfaceTerrain, 'river');
   assert.equal(result.state.nodes['25']?.surfaceTerrain, 'forest');
-  assert.equal(result.state.nodes['15']?.surfaceTerrain, null);
+  assert.equal(result.state.nodes['15']?.surfaceTerrain, 'port');
   assert.equal(result.state.nodes['15']?.visualType, '港口');
   assert.deepEqual(result.state.nodes['15']?.neighbors, stale.nodes['15']?.neighbors);
   assert.equal(result.state.sequence, 42);

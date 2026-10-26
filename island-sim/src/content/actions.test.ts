@@ -11,7 +11,7 @@ test('loads the exact source food and equipment catalogs used by simulation acti
   assert.equal(content.foods.find((row) => row.name === '河豚')?.hp_change, '-3');
   assert.equal(content.foods.find((row) => row.name === '龍血')?.note, '回血而非食物;唯一可回血效果');
   assert.equal(content.equipment.find((row) => row.name_zh === '鐵劍')?.attack, '5');
-  assert.equal(content.equipment.find((row) => row.name_zh === '木級雙手武器')?.speed_modifier, '');
+  assert.equal(content.equipment.find((row) => row.name_zh === '木級雙手武器')?.speed_modifier, '0');
   assert.equal(content.fishing.find((row) => row.outcome === '普通魚')?.overall_probability_percent, '25');
   assert.equal(content.surface.find((row) => row.location_action === '河流探索')?.probability_percent, '20');
   assert.equal(content.surfaceEntryEvents.find((row) => row.outcome === '森林野豬')?.probability_percent, '30');
@@ -20,18 +20,23 @@ test('loads the exact source food and equipment catalogs used by simulation acti
   assert.equal(content.recovered.find((row) => row.action === '森林採野莓' && row.result_or_hazard === '莓果')?.probability_percent, '19');
   assert.equal(content.capabilities.runtimeEnabled, true);
   assert.equal(content.capabilities.provenanceByAction.fishing, 'user-adopted-supplemental');
-  assert.deepEqual(content.readableDocumentPools.map((row) => row.pool_type), ['book', 'drift-bottle']);
-  assert.equal(content.readableDocuments.length, 101);
-  assert.ok(content.readableDocuments.every((row) => row.pool_type === 'book' && row.text === ''));
-  assert.equal(content.readableTexts['book-001'], '');
-  assert.equal(content.readableDocuments.some((row) => row.pool_type === 'drift-bottle'), false);
-  assert.deepEqual(content.nodeNotices, []);
+  assert.deepEqual(content.readableDocumentPools.map((row) => row.pool_type), ['book', 'drift-bottle', 'monument-valley', 'signboard']);
+  assert.equal(content.readableDocuments.length, 44);
+  assert.equal(content.readableDocuments.filter((row) => row.pool_type === 'book').length, 24);
+  assert.equal(content.readableDocuments.filter((row) => row.pool_type === 'book' && row.text === '').length, 1);
+  assert.equal(content.readableTexts['note-1792766963416'], '');
+  assert.equal(content.readableDocuments.find((row) => row.document_id === 'starting-beach-remembrance')?.pool_type, 'signboard');
+  assert.deepEqual(content.nodeNotices, [
+    { node_id: '1', document_id: 'starting-beach-remembrance' },
+    { node_id: '8', document_id: 'starting-beach-remembrance' },
+    { node_id: '13', document_id: 'starting-beach-remembrance' },
+  ]);
   const documents = content.readableDocuments.map((row) => ({
-    id: row.document_id!, pool: row.pool_type as 'book', text: row.text!,
+    id: row.document_id!, pool: row.pool_type as 'book' | 'drift-bottle' | 'monument-valley' | 'signboard', text: row.text!,
   }));
   const bookWeights = readableDocumentPoolWeights(documents, 'book');
-  assert.ok(bookWeights.every(({ probability }) => probability === 1 / 101));
-  assert.equal(selectReadableDocument(documents, 'drift-bottle', 0), null);
+  assert.ok(bookWeights.every(({ probability }) => probability === 1 / 24));
+  assert.equal(selectReadableDocument(documents, 'monument-valley', 0), null);
 });
 
 test('validates node notice bindings against real Nodes and nonempty readable cards', () => {

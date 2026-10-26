@@ -125,10 +125,10 @@ test('playtest bot synchronizes current CSV node metadata into an existing snaps
     assert.equal(synced.rngState, '1234abcd');
     assert.equal(synced.actors['resident-01']?.hitPoints, 17);
     assert.equal(synced.nodes['11']?.surfaceTerrain, 'forest');
-    assert.equal(synced.nodes['11']?.label, '森林');
+    assert.equal(synced.nodes['11']?.label, '河口森林');
     assert.equal(synced.nodes['25']?.surfaceTerrain, 'forest');
     assert.equal(synced.nodes['15']?.visualType, '港口');
-    assert.equal(synced.nodes['15']?.surfaceTerrain, null);
+    assert.equal(synced.nodes['15']?.surfaceTerrain, 'port');
     const repair = store.readEvents().at(-1);
     assert.equal(repair?.kind, 'simulation-lineage-repair');
     assert.equal((repair?.payload as { randomDrawsConsumed: boolean }).randomDrawsConsumed, false);

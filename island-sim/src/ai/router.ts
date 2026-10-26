@@ -238,18 +238,21 @@ export type CostGate =
 
 export async function reserveMaximumCallCost(
   pricing: ProviderPricing | undefined,
+  maxOutputTokens: number,
   ledger: CostLedger,
   now: Date,
   requestId: string,
 ): Promise<CostGate> {
   if (!pricing || !Number.isFinite(pricing.inputUsdPerMillionTokens) || pricing.inputUsdPerMillionTokens < 0
     || !Number.isFinite(pricing.outputUsdPerMillionTokens) || pricing.outputUsdPerMillionTokens < 0
-    || !Number.isSafeInteger(pricing.maxInputTokens) || pricing.maxInputTokens < 1) {
+    || !Number.isSafeInteger(pricing.maxInputTokens) || pricing.maxInputTokens < 1
+    || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 0) {
     return { allowed: false, reason: 'pricing_unconfigured' };
   }
 
   const reservationUsd = (
     pricing.maxInputTokens * pricing.inputUsdPerMillionTokens
+    + maxOutputTokens * pricing.outputUsdPerMillionTokens
   ) / 1_000_000;
   const reservation = await ledger.reserveCost({
     requestId,

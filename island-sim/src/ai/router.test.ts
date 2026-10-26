@@ -72,7 +72,7 @@ test('blocks calls when current pricing is absent and respects the hard monthly 
     }),
     settleCost: async () => ({ exceededCap: false, remainingUsd: 0 }),
   };
-  assert.deepEqual(await reserveMaximumCallCost(undefined, ledger, new Date('2026-10-20T00:00:00Z'), 'call-0'), {
+  assert.deepEqual(await reserveMaximumCallCost(undefined, 10_000, ledger, new Date('2026-10-20T00:00:00Z'), 'call-0'), {
     allowed: false,
     reason: 'pricing_unconfigured',
   });
@@ -84,7 +84,7 @@ test('blocks calls when current pricing is absent and respects the hard monthly 
     verifiedAt: '2026-10-20',
     sourceUrl: 'https://provider.example/pricing',
   };
-  assert.deepEqual(await reserveMaximumCallCost(pricing, ledger, new Date('2026-10-20T00:00:00Z'), 'call-1'), {
+  assert.deepEqual(await reserveMaximumCallCost(pricing, 10_000, ledger, new Date('2026-10-20T00:00:00Z'), 'call-1'), {
     allowed: false,
     reason: 'monthly_cap',
   });
