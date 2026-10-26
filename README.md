@@ -1,11 +1,24 @@
 # AI Karma Island
 
-General implementation remains paused at the user's direction, except for the currently authorized Cookie 6.2 event-timeline update. The next AI should read [HANDOFF.md](HANDOFF.md) first and use it to resume other work only if the user explicitly asks.
+**讓多位 AI 居民在一座孤島上自主生活，觀察他們如何求生、互動，並留下自己的歷史。**
 
-The event timeline now supports an independent all-visible-events or selected-resident filter. Its URL preserves the active page, resident filter, and event page. “All visible events” is limited to the observer's current recent 500-event source window; it does not claim complete lifetime history. The change preserves public/player-only visibility and does not change AI visibility or simulation settlement. See `cookie-work/EXECUTION_LOG.md` and `cookie-work/COOKIE_REVIEW.md` for scope and verification limits.
+AI Karma Island 是一款以大型語言模型驅動居民決策的島嶼生存模擬器。玩家不替居民選擇行動，而是觀察一個持續運作的世界：居民會探索、採集、休息、交流、遭遇危險，也可能死亡並由新一代接續生活。
 
-This repository preserves the current project files and execution evidence for handoff. Follow the handoff links to the source index and Cookie records.
+## 遊戲特色
 
-The implementation is a work in progress. The handoff records the state and verification known when it was written; this bounded event-timeline update does not claim that unrelated typecheck or test failures are resolved.
+- **自主居民**：每位居民由設定好的模型卡驅動，依當下狀態和可見資訊選擇行動。
+- **規則由遊戲引擎裁決**：AI 只能從系統提供的合法行動中選擇；時間、移動、戰鬥、物品和死亡由世界引擎結算。
+- **有限視野與記憶**：居民只根據自己能看見和經歷的事情行動，不會自動知道島上其他地方發生的事。
+- **持續演變的世界**：28 個 Node 組成島嶼地圖，包含生存資源、事件、戰鬥與探索內容；死亡後會留下世界紀錄與遺留物，新一代不繼承前任記憶。
+- **觀察與回顧**：觀察台提供世界地圖、居民資料、AI 意圖、客觀事件時間線與 AI 故事式死亡總結。
+- **可編輯的遊戲內容**：內容工房可管理模型卡、地圖與遊戲資料，並管理遊戲存檔。
 
-維護者部署指南：[island-sim/DEPLOYMENT.md](island-sim/DEPLOYMENT.md)
+## 開始遊玩
+
+目前提供本機執行方式，尚無公開遊玩服務。Windows 需要 Node.js 24.15.0 或更新版本；使用啟動器時，在專案目錄執行 `npm ci`，再執行 `island-sim/start-island.cmd`。服務啟動後，在本機瀏覽器開啟觀察台 `http://127.0.0.1:4173/`，內容工房位於 `http://127.0.0.1:4173/editor`。
+
+完整的安裝、啟動、存檔及停止步驟請看[部署與本機執行指南](island-sim/DEPLOYMENT.md)。開始新局前，先在內容工房設定模型卡和 API 金鑰，再回觀察台分配模型並建立新局。
+
+## 專案狀態
+
+這是仍在開發中的實驗性模擬遊戲。服務預設只允許本機連線，觀察台和內容工房目前沒有登入驗證；請勿直接公開暴露到網際網路。Docker／容器部署尚未驗證。遊戲規則與維護交接資料請從[交接說明](HANDOFF.md)及 `island-sim/references/` 查閱。
