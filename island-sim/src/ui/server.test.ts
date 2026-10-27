@@ -15,6 +15,31 @@ test('observer client script including management-key actions remains syntactica
   assert.match(observerClientScript, /\/api\/settings\/openrouter\/keys\/create/);
 });
 
+test('preserves a save name draft when a refresh replaces the input element', () => {
+  const captureSource = observerClientScript.match(/function captureDrafts\(\) \{[\s\S]*?\n\}/)?.[0];
+  const restoreSource = observerClientScript.match(/function restoreDrafts\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(captureSource, 'captureDrafts must be present in the observer client');
+  assert.ok(restoreSource, 'restoreDrafts must be present in the observer client');
+
+  let saveNameInput = { value: '55555' };
+  const root = {
+    querySelector(selector: string) {
+      if (selector === '[data-save-name]') return saveNameInput;
+      return null;
+    },
+    querySelectorAll() { return []; },
+  };
+  const drafts = new Map();
+  const captureDrafts = new Function('root', 'formDrafts', 'activeModelSlot', `${captureSource}; return captureDrafts;`)(root, drafts, 1);
+  const restoreDrafts = new Function('root', 'formDrafts', 'activeModelSlot', 'loadedModelLists', 'applyLoadedModelList', `${restoreSource}; return restoreDrafts;`)(root, drafts, 1, new Map(), () => {});
+
+  captureDrafts();
+  saveNameInput = { value: '' };
+  restoreDrafts();
+
+  assert.equal(saveNameInput.value, '55555');
+});
+
 test('loads OpenAI-compatible model IDs server-side without exposing keys or inferring generic prices', async () => {
   let requestedUrl = '';
   let authorization = '';

@@ -151,6 +151,8 @@ function applyDeathSummaryControls() {
 function captureDrafts() {
   const slotSelect = root.querySelector('[data-slot-select]');
   if (slotSelect) activeModelSlot = Number(slotSelect.value) || activeModelSlot;
+  const saveNameField = root.querySelector('[data-save-name]');
+  if (saveNameField) formDrafts.set('save-name', saveNameField.value);
   for (const form of root.querySelectorAll('form[data-model-settings]')) {
     const slot = form.dataset.slotId;
     const fallbackValues = [...form.querySelectorAll('input[name="fallbackModels"]:checked')].map((field) => field.value);
@@ -176,6 +178,9 @@ function captureDrafts() {
 function restoreDrafts() {
   const slotSelect = root.querySelector('[data-slot-select]');
   if (slotSelect) slotSelect.value = String(activeModelSlot);
+  const saveNameField = root.querySelector('[data-save-name]');
+  const saveNameDraft = formDrafts.get('save-name');
+  if (saveNameField && saveNameDraft !== undefined) saveNameField.value = saveNameDraft;
   for (const form of root.querySelectorAll('form[data-model-settings]')) {
     form.hidden = Number(form.dataset.slotId) !== activeModelSlot;
     const slot = form.dataset.slotId;
