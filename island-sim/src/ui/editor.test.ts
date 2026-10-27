@@ -11,11 +11,85 @@ import { loadIslandGraph } from '../content/island.ts';
 import { parseCsv } from '../content/csv.ts';
 import { availableActions } from '../engine/simulation.ts';
 import { createInitialWorld, syncWorldNodeNotices } from '../engine/world.ts';
-import { editorMarkup, editorUiKitMarkup, readEditorData, saveEditorData, saveEditorDocumentChanges, validateData } from './editor.ts';
+import { addNodeToEditorData, editorMarkup, editorUiKitMarkup, moveEditorNode, readEditorData, removeNodeFromEditorData, saveEditorData, saveEditorDocumentChanges, validateData } from './editor.ts';
 
 test('map editor no longer exposes per-node region descriptions', () => {
   const markup = editorMarkup();
   assert.doesNotMatch(markup, /區域描述|region_description|data-region-description/);
+});
+
+test('map editor exposes confirmed node deletion and removes all node references safely', () => {
+  const markup = editorMarkup();
+  assert.match(markup, /id="deleteNode"/);
+  assert.match(markup, /刪除 Node/);
+  assert.match(markup, /confirm\(/);
+  assert.match(markup, /selected='';change\(\(\)=>data=next\);\$\('target'\)\.value=''/);
+  assert.match(markup, /next\.edges=next\.edges\.filter\(edge=>edge\.source_node!==selected&&edge\.target_node!==selected\)/);
+  assert.match(markup, /next\.notices=next\.notices\.filter\(notice=>notice\.node_id!==selected\)/);
+  assert.match(markup, /next\.initial_campfire_node_ids=\(next\.initial_campfire_node_ids\|\|\[\]\)\.filter\(id=>id!==selected\)/);
+
+  const data = {
+    nodes: [
+      { node_id: '1', node_label: '出生海灘', image_x_px_approx: '100', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'true', initial_campfire: 'false' },
+      { node_id: '2', node_label: '東海灘', image_x_px_approx: '200', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false', initial_campfire: 'false' },
+      { node_id: '3', node_label: '南海灘', image_x_px_approx: '300', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false', initial_campfire: 'false' },
+      { node_id: '4', node_label: '森林', image_x_px_approx: '400', image_y_px_approx: '100', surface_terrain: 'forest', visual_type: '森林', label_status: 'fixture', starting_location: 'false', initial_campfire: 'false' },
+      { node_id: '5', node_label: '森林邊緣', image_x_px_approx: '500', image_y_px_approx: '100', surface_terrain: 'forest', visual_type: '森林', label_status: 'fixture', starting_location: 'false', initial_campfire: 'true' },
+    ],
+    edges: [
+      { source_node: '1', target_node: '4' }, { source_node: '4', target_node: '2' },
+      { source_node: '2', target_node: '3' }, { source_node: '4', target_node: '5' },
+    ],
+    documents: [{ document_id: 'notice-4', pool_type: 'signboard', text: '告示內容' }],
+    pools: [{ pool_type: 'signboard' }],
+    notices: [{ node_id: '5', document_id: 'notice-4' }],
+    initial_campfire_node_ids: ['5'],
+  };
+
+  const result = removeNodeFromEditorData(data, '5');
+  assert.deepEqual(result.nodes.map((node) => node.node_id), ['1', '2', '3', '4']);
+  assert.ok(result.edges.every((edge) => edge.source_node !== '5' && edge.target_node !== '5'));
+  assert.deepEqual(result.notices, []);
+  assert.deepEqual(result.initial_campfire_node_ids, []);
+  assert.deepEqual(data.nodes.map((node) => node.node_id), ['1', '2', '3', '4', '5'], 'removal should not mutate the previous data state');
+  assert.throws(() => removeNodeFromEditorData(data, '1'), /出生點|出生地形/);
+  assert.throws(() => removeNodeFromEditorData(data, '4'), /不連通/);
+  assert.throws(() => removeNodeFromEditorData({ ...data, nodes: [data.nodes[4]!] }, '5'), /至少保留一個 Node/);
+});
+
+test('map editor adds nodes in placement mode and moves coordinates by pointer drag', () => {
+  const markup = editorMarkup();
+  assert.match(markup, /id="addNode"/);
+  assert.match(markup, /onpointerdown|addEventListener\(['"]pointerdown/);
+  assert.match(markup, /onpointermove|addEventListener\(['"]pointermove/);
+  assert.match(markup, /moveEditorNode/);
+  assert.match(markup, /fires=new Set\(source\.initial_campfire_node_ids\|\|\[\]\)/);
+
+  const data = {
+    nodes: [
+      { node_id: '1', node_label: '出生海灘', image_x_px_approx: '100', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'true', initial_campfire: 'false' },
+      { node_id: '2', node_label: '東海灘', image_x_px_approx: '200', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false' },
+      { node_id: '3', node_label: '南海灘', image_x_px_approx: '300', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false', initial_campfire: 'false' },
+      { node_id: '28', node_label: '森林', image_x_px_approx: '400', image_y_px_approx: '100', surface_terrain: 'forest', visual_type: '森林', label_status: 'fixture', starting_location: 'false', initial_campfire: 'false' },
+    ],
+    edges: [{ source_node: '1', target_node: '2' }, { source_node: '2', target_node: '3' }, { source_node: '3', target_node: '28' }],
+    documents: [], pools: [], notices: [], initial_campfire_node_ids: ['2'],
+  };
+  const added = addNodeToEditorData(data, 123, 456);
+  assert.equal(added.nodeId, '29');
+  assert.deepEqual(added.data.nodes.at(-1), {
+    node_id: '29', node_label: '新節點29', label_status: '新增節點', visual_type: '未分類',
+    image_x_px_approx: '123', image_y_px_approx: '456', neighbor_count: '0',
+    surface_terrain: 'unclassified', surface_terrain_source: 'user-allocated-general-terrain',
+    day_surface_entry_events_enabled: 'false', starting_location: 'false', initial_campfire: 'false',
+  });
+  assert.equal(added.data.nodes.find((node) => node.node_id === '2')?.initial_campfire, 'true');
+  assert.deepEqual(added.data.initial_campfire_node_ids, ['2']);
+  const moved = moveEditorNode(added.data, '29', 321.5, 654.25);
+  assert.equal(moved.nodes.at(-1)?.image_x_px_approx, '321.5');
+  assert.equal(moved.nodes.at(-1)?.image_y_px_approx, '654.25');
+  assert.deepEqual(validateData({ ...moved, edges: [...moved.edges, { source_node: '28', target_node: '29' }] }), []);
+  assert.throws(() => moveEditorNode(added.data, '29', Number.NaN, 0), /有限數字/);
 });
 
 async function createDocumentSaveRoot(): Promise<{ root: string; documentPath: string }> {
@@ -40,9 +114,9 @@ async function readSavedDocuments(documentPath: string): Promise<Record<string, 
 test('editor validates node references and duplicate IDs before CSV persistence', () => {
   const errors = validateData({
     nodes: [
-      { node_id: '1', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'true' },
-      { node_id: '1', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false' },
-      { node_id: '2', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false' },
+      { node_id: '1', node_label: '出生海灘', image_x_px_approx: '100', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'true' },
+      { node_id: '1', node_label: '重複海灘', image_x_px_approx: '200', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false' },
+      { node_id: '2', node_label: '南海灘', image_x_px_approx: '300', image_y_px_approx: '100', surface_terrain: 'coconut-beach', visual_type: '椰子沙灘', label_status: 'fixture', starting_location: 'false' },
     ],
     edges: [{ source_node: '1', target_node: 'missing' }],
     documents: [{ document_id: 'doc-1', pool_type: 'book', text: '已填寫內容' }],

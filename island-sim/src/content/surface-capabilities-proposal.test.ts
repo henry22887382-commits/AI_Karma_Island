@@ -61,3 +61,15 @@ test('uniform-map capability matrix follows current terrain and excludes dungeon
   assert.deepEqual(ids('coconut-harvest'), ['1', '8', '13']);
   assert.deepEqual(ids('fishing'), ['3', '10', '15']);
 });
+
+test('surface capability proposal accepts a unique nonempty profile subset', async () => {
+  const source = parseCsv(await readFile(new URL('../../references/tables/island_nodes.csv', import.meta.url), 'utf8'));
+  const retained = new Set(['1', '2', '3', '4', '5', '6', '8', '9', '13', '15']);
+  const subset = source.filter((row) => retained.has(row.node_id ?? ''));
+
+  const proposal = createSurfaceCapabilitiesProposal(subset);
+  assert.equal(proposal.nodes.length, subset.length);
+  assert.deepEqual(proposal.proposedActionNodeIds['coconut-harvest'], ['1', '8', '13']);
+  assert.throws(() => createSurfaceCapabilitiesProposal([]), /至少保留一個 Node/);
+  assert.throws(() => createSurfaceCapabilitiesProposal([subset[0]!, subset[0]!]), /ID 重複/);
+});

@@ -51,6 +51,9 @@ export interface SurfaceCapabilitiesProposal {
 
 /** Builds an explicit, review-only proposal from the recovered map labels. Never wire as active content. */
 export function createSurfaceCapabilitiesProposal(rows: readonly CsvRow[]): SurfaceCapabilitiesProposal {
+  if (rows.length === 0) throw new Error('地圖 Profile 至少保留一個 Node。');
+  const rowIds = rows.map((row) => required(row, 'node_id'));
+  if (new Set(rowIds).size !== rowIds.length) throw new Error('地圖 Profile 的 Node ID 重複。');
   const nodes = rows.map((row) => {
     const nodeId = required(row, 'node_id');
     const surfaceTerrain = row.surface_terrain ?? '';
@@ -82,7 +85,6 @@ export function createSurfaceCapabilitiesProposal(rows: readonly CsvRow[]): Surf
   const fishingCandidates = nodes.filter((node) => node.surfaceTerrain === 'port').map((node) => node.nodeId);
   const berryForestCandidates = nodes.filter((node) => node.surfaceTerrain === 'berry-forest').map((node) => node.nodeId);
   const selected = nodes.filter((node) => node.candidates.some((candidate) => candidate.action === 'coconut-harvest')).map((node) => node.nodeId);
-  if (nodes.length !== 28 || new Set(nodes.map((node) => node.nodeId)).size !== 28) throw new Error('Surface capability proposal requires the unique 28-Node source map.');
   if (selected.some((id) => !beachCandidates.includes(id))) throw new Error('Proposed coconut Node candidates must be source beach-type Nodes.');
   return {
     status: 'review-only-not-approved',

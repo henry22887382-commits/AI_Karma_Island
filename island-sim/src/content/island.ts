@@ -36,28 +36,42 @@ export function islandGraphFromProfile(
   nodeRows: readonly Readonly<Record<string, unknown>>[],
   edgeRows: readonly Readonly<Record<string, unknown>>[],
 ): IslandGraph {
+  const rowIds = nodeRows.map((row) => profileValue(row, 'node_id'));
+  if (new Set(rowIds).size !== rowIds.length) throw new Error('地圖存檔 Node ID 重複。');
+  if (rowIds.length === 0) throw new Error('地圖至少保留一個 Node。');
+  const baseNodes = new Map(base.nodes.map((node) => [node.id, node]));
   const rows = new Map(nodeRows.map((row) => [profileValue(row, 'node_id'), row]));
-  if (rows.size !== base.nodes.length || base.nodes.some((node) => !rows.has(node.id))) {
-    throw new Error('地圖存檔的 Node 清單與目前遊戲地圖不相容。');
-  }
-  const nodes = base.nodes.map((original) => {
-    const row = rows.get(original.id)!;
-    const terrain = parseSurfaceTerrain(profileValue(row, 'surface_terrain'), original.id);
+  const nodes = nodeRows.map((row) => {
+    const id = profileValue(row, 'node_id');
+    const original = baseNodes.get(id);
+    if (!original && (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))) {
+      throw new Error(`新增 Node ID 必須是正整數：${id}。`);
+    }
+    const terrain = parseSurfaceTerrain(profileValue(row, 'surface_terrain') || (original?.surfaceTerrain ?? 'unclassified'), id);
     const starting = profileValue(row, 'starting_location');
     const initialCampfire = profileValue(row, 'initial_campfire');
-    if (starting !== '' && !['true', 'false'].includes(starting)) throw new Error(`Node ${original.id} 出生點設定無效。`);
-    if (initialCampfire !== '' && !['true', 'false'].includes(initialCampfire)) throw new Error(`Node ${original.id} 營火設定無效。`);
+    if (starting !== '' && !['true', 'false'].includes(starting)) throw new Error(`Node ${id} 出生點設定無效。`);
+    if (initialCampfire !== '' && !['true', 'false'].includes(initialCampfire)) throw new Error(`Node ${id} 營火設定無效。`);
+    const label = profileValue(row, 'node_label') || original?.label || null;
+    const labelStatus = profileValue(row, 'label_status') || original?.labelStatus || '';
+    const visualType = profileValue(row, 'visual_type') || original?.visualType || '未分類';
+    const xText = profileValue(row, 'image_x_px_approx'), yText = profileValue(row, 'image_y_px_approx');
+    const x = parseOptionalNumber(xText), y = parseOptionalNumber(yText);
+    if (!original && (!label?.trim() || !labelStatus.trim() || !visualType.trim() || x === null || y === null)) {
+      throw new Error(`新增 Node ${id} 必須有名稱、地點名稱狀態與有限座標。`);
+    }
     return {
-      ...original,
+      ...(original ?? { id, visualType, label, labelStatus, approximateImagePosition: { x, y } }),
+      id,
       surfaceTerrain: terrain,
-      isStartingLocation: starting === '' ? original.isStartingLocation ?? false : starting === 'true',
-      initialCampfire: initialCampfire === '' ? original.initialCampfire : initialCampfire === 'true',
-      visualType: profileValue(row, 'visual_type') || original.visualType,
-      label: profileValue(row, 'node_label') || null,
-      labelStatus: profileValue(row, 'label_status') || original.labelStatus,
+      isStartingLocation: starting === '' ? original?.isStartingLocation ?? false : starting === 'true',
+      ...(initialCampfire === '' ? (original?.initialCampfire === undefined ? {} : { initialCampfire: original.initialCampfire }) : { initialCampfire: initialCampfire === 'true' }),
+      visualType,
+      label,
+      labelStatus,
+      daySurfaceEntryEventsEnabled: allowsDaySurfaceEntryEvents(terrain),
       approximateImagePosition: {
-        x: parseOptionalNumber(profileValue(row, 'image_x_px_approx')),
-        y: parseOptionalNumber(profileValue(row, 'image_y_px_approx')),
+        x, y,
       },
     };
   });
@@ -68,7 +82,22 @@ export function islandGraphFromProfile(
   assertUnique(edges.map(({ source, target }) => edgeKey(source, target)), '地圖存檔連線');
   const ids = new Set(nodes.map(({ id }) => id));
   for (const edge of edges) if (!ids.has(edge.source) || !ids.has(edge.target)) throw new Error(`地圖連線引用不存在的 Node：${edge.source}-${edge.target}。`);
-  return { ...base, nodes, edges, validation: { connected: isConnected(nodes.map(({ id }) => id), edges), islandNodeCount: nodes.length } };
+  if (!isConnected(nodes.map(({ id }) => id), edges)) throw new Error('地圖不連通；刪除 Node 後必須保持連通。');
+  const startingNodes = nodes.filter((node) => node.isStartingLocation);
+  if (startingNodes.length === 0) throw new Error('地圖至少要保留一個新局出生點。');
+  for (const node of startingNodes) {
+    if (node.surfaceTerrain !== 'beach' && node.surfaceTerrain !== 'coconut-beach') throw new Error(`Node ${node.id} 出生點地形必須是沙灘或椰子沙灘。`);
+  }
+  for (let left = 0; left < startingNodes.length; left += 1) {
+    for (let right = left + 1; right < startingNodes.length; right += 1) {
+      const a = startingNodes[left]!.id, b = startingNodes[right]!.id;
+      if (edges.some((edge) => edge.source === a && edge.target === b || edge.source === b && edge.target === a)) {
+        throw new Error(`出生點 Node ${a} 與 ${b} 不能相鄰。`);
+      }
+    }
+  }
+  if (nodes.filter((node) => node.surfaceTerrain === 'coconut-beach').length !== 3) throw new Error('椰子沙灘分類必須恰好指定 3 個 Node。');
+  return { ...base, nodes, edges, validation: { connected: true, islandNodeCount: nodes.length } };
 }
 
 function profileValue(row: Readonly<Record<string, unknown>>, key: string): string {
