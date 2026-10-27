@@ -13,10 +13,15 @@ const sourceTables = new URL('../../references/tables/', import.meta.url);
 test('projects actual persisted source graph and all ten residents without inventing placements or models', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const world = createInitialWorld(graph, { seed: 'observer-adapter-test', contentVersion: 'test-source' });
+  const legacyNodes = {
+    ...world.nodes,
+    '1': { ...world.nodes['1']!, regionDescription: '舊世界快照中的區域描述' },
+  };
+  const legacyWorld = { ...world, nodes: legacyNodes } as typeof world;
   const observedActor = world.actors['resident-01'];
   assert.ok(observedActor);
   const observedWorld = {
-    ...world,
+    ...legacyWorld,
     actors: { ...world.actors, [observedActor.id]: { ...observedActor, lastActionId: 'move:2', lastActionResult: '抵達 Node 2' } },
   };
   const store = SQLiteWorldStore.open(':memory:');
@@ -28,7 +33,7 @@ test('projects actual persisted source graph and all ten residents without inven
   assert.equal(snapshot.map.edges.length, 51);
   assert.equal(snapshot.residents.length, 10);
   assert.equal(snapshot.residents.find(({ id }) => id === observedActor.id)?.lastActionResult, '抵達 Node 2');
-  assert.ok(snapshot.map.nodes.some((node) => node.regionDescription !== '來源未提供區域描述'));
+  assert.ok(snapshot.map.nodes.every((node) => !Object.hasOwn(node, 'regionDescription')));
   for (const sourceNode of graph.nodes) {
     const projected = snapshot.map.nodes.find((node) => node.id === sourceNode.id);
     assert.ok(projected);

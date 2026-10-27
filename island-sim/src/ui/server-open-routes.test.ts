@@ -23,13 +23,16 @@ test('serves editor page, editor data, and observer API without authentication',
   try {
     const page = await fetch(`${base}/editor`);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /輪迴島｜內容工房/);
+    const pageMarkup = await page.text();
+    assert.match(pageMarkup, /輪迴島｜內容工房/);
+    assert.doesNotMatch(pageMarkup, /區域描述|region_description|id="region"/);
 
     const dataResponse = await fetch(`${base}/editor/api/editor/data`);
     assert.equal(dataResponse.status, 200);
     const data = await dataResponse.json() as { nodes: unknown[]; documents: unknown[] };
     assert.ok(data.nodes.length > 0);
     assert.ok(data.documents.length > 0);
+    assert.ok(data.nodes.every((node) => !Object.hasOwn(node as object, 'region_description')));
 
     assert.equal((await fetch(`${base}/api/observer`)).status, 200);
   } finally {
@@ -42,7 +45,7 @@ test('serves map profile selection, new-session mapId, and save restore over HTT
   const store = SQLiteWorldStore.open(':memory:');
   const defaultProfile = store.ensureDefaultMapProfile({ nodes: [{ node_id: '1', node_label: '預設地圖' }], edges: [], nodeNotices: [] });
   const selectedProfile = store.createMapProfile('選用地圖', {
-    nodes: [{ node_id: '1', node_label: '港邊' }], edges: [], nodeNotices: [{ node_id: '1', document_id: 'shared-document' }],
+    nodes: [{ node_id: '1', node_label: '港邊', region_description: '舊地圖 Profile 欄位' }], edges: [], nodeNotices: [{ node_id: '1', document_id: 'shared-document' }],
   });
   const initialState: WorldState = {
     schemaVersion: 1, sequence: 0, contentVersion: 'test', worldTimeT: 0, seed: 'seed', rngState: '00000001',
@@ -82,6 +85,9 @@ test('serves map profile selection, new-session mapId, and save restore over HTT
   assert.ok(address && typeof address !== 'string');
   const base = `http://127.0.0.1:${address.port}`;
   try {
+    const legacyEditorData = await fetch(`${base}/editor/api/editor/data?mapId=${encodeURIComponent(selectedProfile.mapId)}`).then((response) => response.json()) as { nodes: Record<string, unknown>[] };
+    assert.equal(legacyEditorData.nodes[0]?.region_description, undefined);
+
     const setupBefore = await fetch(`${base}/api/setup`).then((response) => response.json()) as { setupMapId: string; mapProfiles: { mapId: string }[] };
     assert.ok(setupBefore.mapProfiles.some(({ mapId }) => mapId === selectedProfile.mapId));
     assert.equal(setupBefore.setupMapId, defaultProfile.mapId);

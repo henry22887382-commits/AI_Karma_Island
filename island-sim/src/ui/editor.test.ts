@@ -13,6 +13,11 @@ import { availableActions } from '../engine/simulation.ts';
 import { createInitialWorld, syncWorldNodeNotices } from '../engine/world.ts';
 import { editorMarkup, editorUiKitMarkup, readEditorData, saveEditorData, saveEditorDocumentChanges, validateData } from './editor.ts';
 
+test('map editor no longer exposes per-node region descriptions', () => {
+  const markup = editorMarkup();
+  assert.doesNotMatch(markup, /區域描述|region_description|data-region-description/);
+});
+
 async function createDocumentSaveRoot(): Promise<{ root: string; documentPath: string }> {
   const root = mkdtempSync(join(tmpdir(), `island-document-save-${process.pid}-`));
   const tablesPath = resolve(root, 'references/tables');
@@ -169,7 +174,7 @@ test('workbench keeps three desktop columns and adds scoped mobile workspace tab
   assert.doesNotMatch(kit, /<body class="editor-workbench">|\.editor-workbench \.text-mobile-tabs/);
 });
 
-test('editor preserves gameplay terrain, named locations, and source-level area descriptions', async () => {
+test('editor preserves gameplay terrain and named locations without per-node region descriptions', async () => {
   const data = await readEditorData(fileURLToPath(new URL('../../', import.meta.url)));
   const allocated = data.nodes.filter((node) => node.surface_terrain_source === 'user-allocated-general-terrain');
   assert.deepEqual(allocated.map((node) => [node.node_id, node.surface_terrain]), [
@@ -182,10 +187,10 @@ test('editor preserves gameplay terrain, named locations, and source-level area 
   assert.ok(nodeLabels.every((label) => Boolean(label)));
   assert.equal(new Set(nodeLabels).size, nodeLabels.length);
   assert.ok(data.nodes.every((node) => node.node_label !== `Node ${node.node_id}`));
+  assert.ok(data.nodes.every((node) => !Object.hasOwn(node, 'region_description')));
   for (const nodeId of ['6', '19', '20', '22', '26']) {
     const node = data.nodes.find((candidate) => candidate.node_id === nodeId);
     assert.ok(node?.node_label);
-    if (['19', '20', '26'].includes(nodeId)) assert.doesNotMatch(node?.region_description ?? '', /石堆|山路|河岸/);
   }
 });
 
@@ -216,7 +221,7 @@ test('editor CSV save and reload preserves text CRUD, map edits, and runtime-rea
   const node = data.nodes.find((candidate) => candidate.node_id === '1');
   assert.ok(node);
   Object.assign(node, {
-    node_label: '編輯器驗收點', region_description: '已保存的區域敘述', image_x_px_approx: '135', image_y_px_approx: '560',
+    node_label: '編輯器驗收點', image_x_px_approx: '135', image_y_px_approx: '560',
   });
   data.edges.push({ source_node: '1', target_node: '5', bidirectional: 'true', kind: 'editor_link', evidence: 'roundtrip-test' });
 
@@ -227,7 +232,7 @@ test('editor CSV save and reload preserves text CRUD, map edits, and runtime-rea
   assert.equal(reloaded.documents.some((document) => document.document_id === deletedDocumentId), false);
   assert.deepEqual(reloaded.notices, [...originalNotices, { node_id: '2', document_id: cardId }]);
   assert.equal(reloaded.nodes.find((node) => node.node_id === '1')?.image_x_px_approx, '135');
-  assert.equal(reloaded.nodes.find((node) => node.node_id === '1')?.region_description, '已保存的區域敘述');
+  assert.equal(Object.hasOwn(reloaded.nodes.find((node) => node.node_id === '1') ?? {}, 'region_description'), false);
   assert.equal(reloaded.edges.length, originalEdgeCount + 1);
   const backedUpDocuments = await parseCsv(await readFile(resolve(backup, 'readable_documents.csv'), 'utf8'));
   assert.ok(backedUpDocuments.some((document) => document.document_id === deletedDocumentId));

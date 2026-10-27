@@ -1,29 +1,29 @@
-node_id,visual_type,node_label,label_status,region_description,image_x_px_approx,image_y_px_approx,neighbor_count,surface_terrain,surface_terrain_source,day_surface_entry_events_enabled,starting_location
-1,椰子沙灘,西營地・西椰子海灘,未逐點命名,01–05：西側沙灘／椰子海灘／礁石／岬角,132,558,3,coconut-beach,user-confirmed-coconut-beach-classification,true,true
-2,海灘類,西岬沙灘,未逐點命名,01–05：西側沙灘／椰子海灘／礁石／岬角,101,456,3,beach,user-provided-location-group-mapping,true,false
-3,一般地形,西坡森林,未逐點命名,01–05：西側沙灘／椰子海灘／礁石／岬角,116,332,3,forest,user-allocated-general-terrain,true,false
-4,海灘類,西北白灘,未逐點命名,01–05：西側沙灘／椰子海灘／礁石／岬角,162,208,3,beach,user-provided-location-group-mapping,true,false
-5,一般地形,西源河灣,未逐點命名,01–05：西側沙灘／椰子海灘／礁石／岬角,256,112,3,river,user-allocated-general-terrain,true,false
-6,一般地形,北岸石堆,中性 Node 編號,06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘,367,59,3,rock,user-provided-location-group-mapping,true,false
-7,一般地形,北風海岸,按群組順序對應（請勿視作已逐點命名）,06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘,517,53,3,beach,user-provided-location-group-mapping,true,false
-8,椰子沙灘,東營地・東椰子海灘,按群組順序對應（請勿視作已逐點命名）,06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘,630,113,3,coconut-beach,user-confirmed-coconut-beach-classification,true,true
-9,莓果森林,東岸森林,按群組順序對應（請勿視作已逐點命名）,06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘,752,193,3,berry-forest,user-confirmed-berry-forest-classification-2026-10-25,true,false
-10,海灘類,東部沙灘,按群組順序對應（請勿視作已逐點命名）,06–10：北岸石堆／北部海岸／東北沙灘／東岸森林／東部沙灘,810,317,3,beach,user-provided-location-group-mapping,true,false
-11,一般地形,河口森林,使用者確認（2026-10-22）,11–16：河口／椰子海灘／南側沙灘／港口,821,440,3,forest,user-confirmed-node-terrain,true,false
-12,海灘類,南灣沙灘,未逐點命名,11–16：河口／椰子海灘／南側沙灘／港口,758,561,3,beach,user-provided-location-group-mapping,true,false
-13,椰子沙灘,南營地,未逐點命名,11–16：河口／椰子海灘／南側沙灘／港口,663,689,3,coconut-beach,user-confirmed-coconut-beach-classification,true,true
-14,海灘類,南岬沙灘,未逐點命名,11–16：河口／椰子海灘／南側沙灘／港口,546,744,3,beach,user-provided-location-group-mapping,true,false
-15,港口,港口,圖示明確,11–16：河口／椰子海灘／南側沙灘／港口,418,752,3,port,canonical-special-location-classification,false,false
-16,海灘類,西南白灘,未逐點命名,11–16：河口／椰子海灘／南側沙灘／港口,270,710,3,beach,user-provided-location-group-mapping,true,false
-17,莓果森林,西部森林,按群組順序對應（請勿視作已逐點命名）,17–20：地圖 Node 群組（未逐點提供區域描述）,265,504,5,berry-forest,user-confirmed-berry-forest-classification-2026-10-25,true,false
-18,一般地形,西部林間空地,按群組順序對應（請勿視作已逐點命名）,17–20：地圖 Node 群組（未逐點提供區域描述）,275,334,5,forest,user-allocated-general-terrain,true,false
-19,一般地形,西脊石坡,中性 Node 編號,17–20：地圖 Node 群組（未逐點提供區域描述）,358,230,4,rock,user-provided-location-group-mapping,true,false
-20,一般地形,北坡石山,中性 Node 編號,17–20：地圖 Node 群組（未逐點提供區域描述）,447,158,4,rock,user-allocated-general-terrain,true,false
-21,地牢入口,火山入口,圖示明確,21–24：火山入口／東北石堆／東部森林／河流,507,228,2,dungeon-entrance,canonical-special-location-classification,true,false
-22,一般地形,東北石堆,中性 Node 編號,21–24：火山入口／東北石堆／東部森林／河流,618,287,5,rock,user-provided-location-group-mapping,true,false
-23,莓果森林,東部森林,按群組順序對應（請勿視作已逐點命名）,21–24：火山入口／東北石堆／東部森林／河流,668,413,5,berry-forest,user-confirmed-berry-forest-classification-2026-10-25,true,false
-24,一般地形,東側河流,按群組順序對應（請勿視作已逐點命名）,21–24：火山入口／東北石堆／東部森林／河流,670,513,4,river,user-provided-location-group-mapping,true,false
-25,中央營地,中央營地,圖示明確,25–28：地圖 Node 群組（未逐點提供區域描述）,448,477,6,forest,user-confirmed-node-terrain,true,false
-26,一般地形,林畔河灘,中性 Node 編號,25–28：地圖 Node 群組（未逐點提供區域描述）,543,585,5,river,user-allocated-general-terrain,true,false
-27,紀念碑谷,紀念碑谷,圖示明確,25–28：地圖 Node 群組（未逐點提供區域描述）,370,390,4,monument-valley,canonical-special-location-classification,false,false
-28,一般地形,內陸林間空地,按群組順序對應（請勿視作已逐點命名）,25–28：地圖 Node 群組（未逐點提供區域描述）,410,628,5,forest,user-allocated-general-terrain,true,false
+node_id,visual_type,node_label,label_status,image_x_px_approx,image_y_px_approx,neighbor_count,surface_terrain,surface_terrain_source,day_surface_entry_events_enabled,starting_location
+1,椰子沙灘,西營地・西椰子海灘,未逐點命名,132,558,3,coconut-beach,user-confirmed-coconut-beach-classification,true,true
+2,海灘類,西岬沙灘,未逐點命名,101,456,3,beach,user-provided-location-group-mapping,true,false
+3,一般地形,西坡森林,未逐點命名,116,332,3,forest,user-allocated-general-terrain,true,false
+4,海灘類,西北白灘,未逐點命名,162,208,3,beach,user-provided-location-group-mapping,true,false
+5,一般地形,西源河灣,未逐點命名,256,112,3,river,user-allocated-general-terrain,true,false
+6,一般地形,北岸石堆,中性 Node 編號,367,59,3,rock,user-provided-location-group-mapping,true,false
+7,一般地形,北風海岸,按群組順序對應（請勿視作已逐點命名）,517,53,3,beach,user-provided-location-group-mapping,true,false
+8,椰子沙灘,東營地・東椰子海灘,按群組順序對應（請勿視作已逐點命名）,630,113,3,coconut-beach,user-confirmed-coconut-beach-classification,true,true
+9,莓果森林,東岸森林,按群組順序對應（請勿視作已逐點命名）,752,193,3,berry-forest,user-confirmed-berry-forest-classification-2026-10-25,true,false
+10,海灘類,東部沙灘,按群組順序對應（請勿視作已逐點命名）,810,317,3,beach,user-provided-location-group-mapping,true,false
+11,一般地形,河口森林,使用者確認（2026-10-22）,821,440,3,forest,user-confirmed-node-terrain,true,false
+12,海灘類,南灣沙灘,未逐點命名,758,561,3,beach,user-provided-location-group-mapping,true,false
+13,椰子沙灘,南營地,未逐點命名,663,689,3,coconut-beach,user-confirmed-coconut-beach-classification,true,true
+14,海灘類,南岬沙灘,未逐點命名,546,744,3,beach,user-provided-location-group-mapping,true,false
+15,港口,港口,圖示明確,418,752,3,port,canonical-special-location-classification,false,false
+16,海灘類,西南白灘,未逐點命名,270,710,3,beach,user-provided-location-group-mapping,true,false
+17,莓果森林,西部森林,按群組順序對應（請勿視作已逐點命名）,265,504,5,berry-forest,user-confirmed-berry-forest-classification-2026-10-25,true,false
+18,一般地形,西部林間空地,按群組順序對應（請勿視作已逐點命名）,275,334,5,forest,user-allocated-general-terrain,true,false
+19,一般地形,西脊石坡,中性 Node 編號,358,230,4,rock,user-provided-location-group-mapping,true,false
+20,一般地形,北坡石山,中性 Node 編號,447,158,4,rock,user-allocated-general-terrain,true,false
+21,地牢入口,火山入口,圖示明確,507,228,2,dungeon-entrance,canonical-special-location-classification,true,false
+22,一般地形,東北石堆,中性 Node 編號,618,287,5,rock,user-provided-location-group-mapping,true,false
+23,莓果森林,東部森林,按群組順序對應（請勿視作已逐點命名）,668,413,5,berry-forest,user-confirmed-berry-forest-classification-2026-10-25,true,false
+24,一般地形,東側河流,按群組順序對應（請勿視作已逐點命名）,670,513,4,river,user-provided-location-group-mapping,true,false
+25,中央營地,中央營地,圖示明確,448,477,6,forest,user-confirmed-node-terrain,true,false
+26,一般地形,林畔河灘,中性 Node 編號,543,585,5,river,user-allocated-general-terrain,true,false
+27,紀念碑谷,紀念碑谷,圖示明確,370,390,4,monument-valley,canonical-special-location-classification,false,false
+28,一般地形,內陸林間空地,按群組順序對應（請勿視作已逐點命名）,410,628,5,forest,user-allocated-general-terrain,true,false

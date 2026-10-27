@@ -2,9 +2,10 @@ import type { WorldActor, WorldState } from '../domain/model.ts';
 
 /** Read-time v1->v2 upgrade; the original JSON is unchanged until the next normal commit. */
 export function migrateWorldSnapshot(snapshot: WorldState): WorldState {
-  if (snapshot.schemaVersion === 2) return snapshot.mapId ? snapshot : { ...snapshot, mapId: 'default-map' };
+  const cleanedSnapshot = stripLegacyRegionDescriptions(snapshot);
+  if (cleanedSnapshot.schemaVersion === 2) return cleanedSnapshot.mapId ? cleanedSnapshot : { ...cleanedSnapshot, mapId: 'default-map' };
   const actors: Record<string, WorldActor> = {};
-  for (const [key, actor] of Object.entries(snapshot.actors)) {
+  for (const [key, actor] of Object.entries(cleanedSnapshot.actors)) {
     const identity = legacySlotAndGeneration(actor.id);
     const slotId = actor.slotId ?? identity?.slotId ?? null;
     const generation = actor.generation ?? identity?.generation ?? null;
@@ -16,7 +17,21 @@ export function migrateWorldSnapshot(snapshot: WorldState): WorldState {
       diedAtT: actor.diedAtT ?? null,
     };
   }
-  return { ...snapshot, schemaVersion: 2, mapId: snapshot.mapId ?? 'default-map', actors };
+  return { ...cleanedSnapshot, schemaVersion: 2, mapId: cleanedSnapshot.mapId ?? 'default-map', actors };
+}
+
+function stripLegacyRegionDescriptions(snapshot: WorldState): WorldState {
+  let changed = false;
+  const nodes = Object.fromEntries(Object.entries(snapshot.nodes).map(([nodeId, node]) => {
+    const original = node as unknown as Record<string, unknown>;
+    if (!Object.hasOwn(original, 'regionDescription') && !Object.hasOwn(original, 'region_description')) return [nodeId, node];
+    const cleaned: Record<string, unknown> = { ...original };
+    delete cleaned.regionDescription;
+    delete cleaned.region_description;
+    changed = true;
+    return [nodeId, cleaned as unknown as WorldState['nodes'][string]];
+  }));
+  return changed ? { ...snapshot, nodes } : snapshot;
 }
 
 function legacySlotAndGeneration(actorId: string): { readonly slotId: string; readonly generation: number } | undefined {

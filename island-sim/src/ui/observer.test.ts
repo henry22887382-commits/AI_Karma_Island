@@ -8,7 +8,7 @@ const snapshot: ObserverSnapshot = {
   worldTime: { day: 2, timeT: 73, phase: '白天' },
   simulation: { running: false, speedLabel: '暫停中', freshAt: '2026-10-20T10:00:00+08:00' },
   map: {
-    nodes: [{ id: '1', label: '', labelStatus: '未逐點命名', regionDescription: '西側沙灘', x: 132, y: 558, residents: ['1.1'], objects: [] }],
+    nodes: [{ id: '1', label: '', labelStatus: '未逐點命名', x: 132, y: 558, residents: ['1.1'], objects: [] }],
     edges: [],
   },
   residents: [{ id: '1.1', generation: 1, model: '待設定', nodeId: '1', remainingLife: 30, hunger: 5, sleep: 3, inventory: [], equipment: [], lastAction: '醒來', lastActionResult: '' }],
@@ -17,7 +17,9 @@ const snapshot: ObserverSnapshot = {
 };
 
 test('renders the readonly observer map, resident detail, timeline and death-summary entry point', () => {
-  const html = renderObserverMarkup(snapshot);
+  const legacySnapshot = structuredClone(snapshot) as unknown as { map: { nodes: Record<string, unknown>[] } };
+  legacySnapshot.map.nodes[0]!.regionDescription = '舊存檔中的區域描述';
+  const html = renderObserverMarkup(legacySnapshot as unknown as ObserverSnapshot);
   assert.match(html, /主島地圖/);
   assert.match(html, /viewBox="0 0 1300 823"/);
   assert.match(html, /未逐點命名/);
@@ -25,6 +27,7 @@ test('renders the readonly observer map, resident detail, timeline and death-sum
   assert.match(html, /事件時間線/);
   assert.match(html, /tab-death-summaries/);
   assert.match(html, /資料更新/);
+  assert.doesNotMatch(html, /區域描述|舊存檔中的區域描述/);
 });
 
 test('keeps pending setup, initialization and synchronization status in error records', () => {
@@ -141,6 +144,17 @@ test('binds the generated observer tabs directly and restores bindings after ref
   assert.match(server, /root\.innerHTML = result\.markup;[\s\S]*?bindTabButtons\(\);/);
   assert.match(server, /candidate\.setAttribute\('aria-selected', String\(selected\)\)/);
   assert.match(server, /panel\.hidden = tablist\.dataset\.responsiveTabs === 'mobile'/);
+});
+
+test('keeps successful save feedback through observer refreshes until the user clicks elsewhere', async () => {
+  const server = await readFile(new URL('./server.ts', import.meta.url), 'utf8');
+  const script = server.match(/(?:export )?const observerClientScript = `([\s\S]*?)`;/)?.[1] ?? '';
+  assert.match(script, /let lifecycleFeedback = '';/);
+  assert.match(script, /function setLifecycleFeedback\(message\)[\s\S]*?lifecycleFeedback = message;/);
+  assert.match(script, /function restoreLifecycleFeedback\(\)[\s\S]*?feedback\.textContent = lifecycleFeedback;/);
+  assert.match(script, /root\.innerHTML = result\.markup;[\s\S]*?restoreLifecycleFeedback\(\);/);
+  assert.match(script, /if \(kind === 'save'\) setLifecycleFeedback\('存檔完成。'\)/);
+  assert.match(script, /document\.addEventListener\('click', \(event\) => \{[\s\S]*?clearLifecycleFeedback\(\);/);
 });
 
 test('the observer client script template expands to valid JavaScript', async () => {

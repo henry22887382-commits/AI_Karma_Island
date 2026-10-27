@@ -14,7 +14,6 @@ export interface IslandNode {
   readonly daySurfaceEntryEventsEnabled?: boolean;
   readonly label: string | null;
   readonly labelStatus: string;
-  readonly regionDescription: string;
   readonly approximateImagePosition: Readonly<{ x: number | null; y: number | null }>;
 }
 
@@ -56,7 +55,6 @@ export function islandGraphFromProfile(
       visualType: profileValue(row, 'visual_type') || original.visualType,
       label: profileValue(row, 'node_label') || null,
       labelStatus: profileValue(row, 'label_status') || original.labelStatus,
-      regionDescription: profileValue(row, 'region_description') || original.regionDescription,
       approximateImagePosition: {
         x: parseOptionalNumber(profileValue(row, 'image_x_px_approx')),
         y: parseOptionalNumber(profileValue(row, 'image_y_px_approx')),
@@ -106,7 +104,6 @@ export async function loadIslandGraph(directory: URL): Promise<IslandGraph> {
       daySurfaceEntryEventsEnabled: allowsDaySurfaceEntryEvents(surfaceTerrain),
       label: row.node_label ? row.node_label : null,
       labelStatus: required(row, 'label_status'),
-      regionDescription: required(row, 'region_description'),
       approximateImagePosition: {
         x: parseOptionalNumber(row.image_x_px_approx),
         y: parseOptionalNumber(row.image_y_px_approx),

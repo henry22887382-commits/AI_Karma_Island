@@ -145,7 +145,6 @@ export function syncWorldNodeMetadataFromGraph(state: WorldState, graph: IslandG
       ...(existing.surfaceTerrain !== source.surfaceTerrain ? ['surfaceTerrain'] : []),
       ...(existing.daySurfaceEntryEventsEnabled !== source.daySurfaceEntryEventsEnabled ? ['daySurfaceEntryEventsEnabled'] : []),
       ...(existing.isStartingLocation !== (source.isStartingLocation ?? false) ? ['isStartingLocation'] : []),
-      ...(existing.regionDescription !== source.regionDescription ? ['regionDescription'] : []),
       ...(JSON.stringify(existing.mapPosition) !== JSON.stringify(source.approximateImagePosition) ? ['mapPosition'] : []),
     ];
     if (fields.length === 0) continue;
@@ -157,7 +156,6 @@ export function syncWorldNodeMetadataFromGraph(state: WorldState, graph: IslandG
       surfaceTerrain: source.surfaceTerrain,
       daySurfaceEntryEventsEnabled: source.daySurfaceEntryEventsEnabled ?? true,
       isStartingLocation: source.isStartingLocation ?? false,
-      regionDescription: source.regionDescription,
       mapPosition: source.approximateImagePosition,
     };
     changedFieldsByNode.push({ nodeId, fields });
@@ -276,7 +274,6 @@ function toWorldNodes(graph: IslandGraph): Readonly<Record<string, WorldNode>> {
     visualType: node.visualType,
     surfaceTerrain: node.surfaceTerrain,
     isStartingLocation: node.isStartingLocation ?? false,
-    regionDescription: node.regionDescription,
     mapPosition: node.approximateImagePosition,
     daySurfaceEntryEventsEnabled: node.daySurfaceEntryEventsEnabled ?? true,
     neighbors: [...(neighbors.get(node.id) ?? [])].sort((left, right) => Number(left) - Number(right)),

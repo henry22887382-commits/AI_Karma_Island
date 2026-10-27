@@ -764,12 +764,22 @@ function toMapProfile(row: MapProfileRow): MapProfile {
   return {
     mapId: row.map_id,
     name: row.name,
-    nodes: JSON.parse(row.nodes_json) as JsonValue[],
+    nodes: stripLegacyRegionDescriptions(JSON.parse(row.nodes_json) as JsonValue[]),
     edges: JSON.parse(row.edges_json) as JsonValue[],
     nodeNotices: JSON.parse(row.node_notices_json) as JsonValue[],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function stripLegacyRegionDescriptions(nodes: readonly JsonValue[]): JsonValue[] {
+  return nodes.map((value) => {
+    if (!isJsonRecord(value)) return value;
+    const cleaned = { ...value };
+    delete cleaned.regionDescription;
+    delete cleaned.region_description;
+    return cleaned;
+  });
 }
 
 function validateMapProfileContent(content: MapProfileContent): void {

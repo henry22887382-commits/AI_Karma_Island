@@ -35,7 +35,7 @@ function editorMapContent(data: Awaited<ReturnType<typeof readEditorData>>): Map
 function profileRows(rows: readonly JsonValue[]): CsvRow[] {
   return rows.map((value) => {
     if (value === null || Array.isArray(value) || typeof value !== 'object') throw new Error('地圖存檔資料列格式不正確。');
-    return Object.fromEntries(Object.entries(value).map(([key, cell]) => {
+    return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'region_description').map(([key, cell]) => {
       if (cell === null || typeof cell === 'object') throw new Error('地圖存檔欄位必須是文字或數字。');
       return [key, String(cell)];
     }));
@@ -54,7 +54,6 @@ function graphFromWorldState(base: Awaited<ReturnType<typeof loadIslandGraph>>, 
       id: node.id, label: node.label, labelStatus: node.labelStatus, visualType: node.visualType,
       surfaceTerrain: node.surfaceTerrain ?? null, isStartingLocation: node.isStartingLocation ?? false,
       daySurfaceEntryEventsEnabled: node.daySurfaceEntryEventsEnabled ?? true,
-      regionDescription: node.regionDescription ?? source?.regionDescription ?? '',
       approximateImagePosition: node.mapPosition ?? source?.approximateImagePosition ?? { x: null, y: null },
     };
   });
@@ -90,9 +89,29 @@ let pendingSetupAssignments = 0;
 let backgroundRefreshPending = false;
 let intentRefreshInFlight = false;
 let lifecycleBusy = false;
+let lifecycleFeedback = '';
 let summarizerSaveInFlight = false;
 let refreshSequence = 0;
 let historyPageAnchor = null;
+function setLifecycleFeedback(message) {
+  lifecycleFeedback = message;
+  const feedback = root.querySelector('[data-lifecycle-feedback]');
+  if (feedback) feedback.textContent = message;
+}
+function restoreLifecycleFeedback() {
+  const feedback = root.querySelector('[data-lifecycle-feedback]');
+  if (feedback) feedback.textContent = lifecycleFeedback;
+}
+function clearLifecycleFeedback() {
+  if (!lifecycleFeedback) return;
+  lifecycleFeedback = '';
+  const feedback = root.querySelector('[data-lifecycle-feedback]');
+  if (feedback) feedback.textContent = '';
+}
+document.addEventListener('click', (event) => {
+  const target = event.target instanceof Element ? event.target.closest('[data-lifecycle="save"]') : null;
+  if (!target) clearLifecycleFeedback();
+});
 function syncObserverUrl() {
   const url = new URL(window.location.href);
   const set = (key, value) => value === undefined || value === null || value === '' ? url.searchParams.delete(key) : url.searchParams.set(key, String(value));
@@ -589,6 +608,7 @@ async function refresh(options = {}) {
     if (options.resetHistoryPage) { transientUiState.page = 1; transientUiState.eventAnchor = null; }
     captureDrafts();
     root.innerHTML = result.markup;
+    restoreLifecycleFeedback();
     applyDeathSummaryControls();
     bindTabButtons();
     restoreDrafts();
@@ -800,6 +820,7 @@ root.addEventListener('click', async (event) => {
         : kind === 'load'
           ? { kind, saveId: root.querySelector('[data-save-select]')?.value }
           : { kind };
+    if (kind === 'save') clearLifecycleFeedback();
     target.disabled = true;
     if (feedback) feedback.textContent = '正在處理…';
     try {
@@ -809,7 +830,8 @@ root.addEventListener('click', async (event) => {
     if (kind === 'load') clearPendingSelect(root.querySelector('[data-save-select]'));
     await refresh();
       const nextFeedback = root.querySelector('[data-lifecycle-feedback]');
-      if (nextFeedback) nextFeedback.textContent = kind === 'save' ? '存檔完成。' : kind === 'load' ? '存檔已載入，模擬已自動恢復。' : kind === 'end' ? '當局已結束並封存。' : '新局已建立，可以恢復模擬。';
+      if (kind === 'save') setLifecycleFeedback('存檔完成。');
+      else if (nextFeedback) nextFeedback.textContent = kind === 'load' ? '存檔已載入，模擬已自動恢復。' : kind === 'end' ? '當局已結束並封存。' : '新局已建立，可以恢復模擬。';
     } catch (error) {
       const nextFeedback = root.querySelector('[data-lifecycle-feedback]');
       if (nextFeedback) nextFeedback.textContent = error instanceof Error ? error.message : '遊戲局操作未完成。';

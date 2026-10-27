@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadIslandGraph } from './island.ts';
+import { islandGraphFromProfile, loadIslandGraph } from './island.ts';
 
 test('loads the source graph without deriving edges from the drawing', async () => {
   const graph = await loadIslandGraph(new URL('../../references/tables/', import.meta.url));
@@ -25,4 +25,28 @@ test('validates graph connectivity while retaining the source edge count', async
   const graph = await loadIslandGraph(new URL('../../references/tables/', import.meta.url));
   assert.equal(graph.validation.connected, true);
   assert.equal(graph.validation.islandNodeCount, 28);
+});
+
+test('ignores legacy region_description values in saved map profiles', async () => {
+  const base = await loadIslandGraph(new URL('../../references/tables/', import.meta.url));
+  const legacyNodeRows = base.nodes.map((node) => ({
+    node_id: node.id,
+    visual_type: node.visualType,
+    node_label: node.label ?? '',
+    label_status: node.labelStatus,
+    region_description: '舊地圖存檔中的區域描述',
+    image_x_px_approx: node.approximateImagePosition.x ?? '',
+    image_y_px_approx: node.approximateImagePosition.y ?? '',
+    surface_terrain: node.surfaceTerrain ?? '',
+    starting_location: String(node.isStartingLocation ?? false),
+  }));
+  const graph = islandGraphFromProfile(base, legacyNodeRows, base.edges.map((edge) => ({
+    source_node: edge.source,
+    target_node: edge.target,
+    kind: edge.kind,
+    evidence: edge.evidence,
+  })));
+
+  assert.equal(graph.nodes.length, base.nodes.length);
+  assert.ok(graph.nodes.every((node) => !Object.hasOwn(node, 'regionDescription')));
 });

@@ -80,6 +80,29 @@ test('seeds and manages independent map profiles while protecting the default pr
   store.close();
 });
 
+test('strips legacy region description keys when reading map profiles without rewriting stored JSON', () => {
+  const database = new DatabaseSync(':memory:');
+  const store = new SQLiteWorldStore(database);
+  const profile = store.createMapProfile('舊地圖', {
+    nodes: [{ node_id: '1', region_description: '舊 Snake 欄位', regionDescription: '舊 camel 欄位' }],
+    edges: [],
+    nodeNotices: [],
+  });
+
+  const stored = database.prepare('SELECT nodes_json FROM map_profiles WHERE map_id=?').get(profile.mapId) as { nodes_json: string };
+  const storedNode = JSON.parse(stored.nodes_json)[0] as Record<string, unknown>;
+  const readNode = store.readMapProfile(profile.mapId)?.nodes[0] as Record<string, unknown>;
+  const listedNode = store.listMapProfiles().find(({ mapId }) => mapId === profile.mapId)?.nodes[0] as Record<string, unknown>;
+
+  assert.equal(readNode.region_description, undefined);
+  assert.equal(readNode.regionDescription, undefined);
+  assert.equal(listedNode.region_description, undefined);
+  assert.equal(listedNode.regionDescription, undefined);
+  assert.equal(storedNode.region_description, '舊 Snake 欄位');
+  assert.equal(storedNode.regionDescription, '舊 camel 欄位');
+  store.close();
+});
+
 test('persists map profiles and selected mapId across database close, reopen, and save restore', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'island-map-profile-'));
   const databasePath = join(directory, 'world.sqlite');

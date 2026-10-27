@@ -205,7 +205,6 @@ export function projectSnapshot(state: WorldState, events: readonly WorldEvent[]
         label: locationNameForNode(node.id, node.label ?? sourceNodes.get(node.id)?.label) ?? '',
         labelStatus: node.labelStatus,
         surfaceTerrain: node.surfaceTerrain ?? null,
-        regionDescription: node.regionDescription ?? sourceNodes.get(node.id)?.regionDescription ?? '來源未提供區域描述',
         ...(coordinates.get(node.id) ?? { x: 0, y: 0 }),
         residents: nodeResidents.get(node.id) ?? [],
         objects: nodeObjects.get(node.id) ?? [],

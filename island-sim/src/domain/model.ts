@@ -130,7 +130,6 @@ export interface WorldNode {
   readonly surfaceTerrain: SurfaceTerrainClassification | null;
   readonly isStartingLocation?: boolean;
   readonly daySurfaceEntryEventsEnabled?: boolean;
-  readonly regionDescription?: string;
   readonly mapPosition?: Readonly<{ x: number | null; y: number | null }>;
   readonly neighbors: readonly string[];
   readonly safe: boolean | null;
