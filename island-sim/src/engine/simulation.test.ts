@@ -2129,6 +2129,50 @@ test('independent night river bear roll creates a same-Node scheduled monster ac
   assert.equal(nextWorldEvent(advanced.state).kind, 'monster-action');
 });
 
+test('surface exploration eligibility follows terrain for every Node, while night diving remains night-only', async () => {
+  const graph = await loadIslandGraph(sourceTables);
+  const content = await loadSimulationActionContent(sourceTables);
+  const initial = createInitialWorld(graph, { seed: 'terrain-only-exploration-eligibility', contentVersion: 'surface-rules-2026-10-22' });
+  const actorId = 'resident-01';
+  const stateAt = (nodeId: string, terrain: 'rock' | 'river' | 'beach', worldTimeT = 0) => ({
+    ...initial,
+    worldTimeT,
+    actors: Object.fromEntries(Object.values(initial.actors).map((actor) => [actor.id, {
+      ...actor, alive: actor.id === actorId, nodeId: actor.id === actorId ? nodeId : null,
+      nextActionAtT: actor.id === actorId ? worldTimeT : 100,
+    }])) as typeof initial.actors,
+    nodes: { ...initial.nodes, [nodeId]: { ...initial.nodes[nodeId]!, surfaceTerrain: terrain } },
+  });
+
+  const rockState = stateAt('1', 'rock');
+  const rockAction = availableActions(rockState, actorId, graph, undefined, content).find(({ id }) => id === 'surface:rock-exploration');
+  assert.ok(rockAction, 'rock terrain should allow exploration even when the Node is absent from the original action crosswalk');
+  const rockResult = settleNextAction(rockState, { actorId, actionId: rockAction.id, timeCostT: rockAction.costT, payload: rockAction.payload }, graph, undefined, content);
+  assert.equal(rockResult.ok, true, rockResult.ok ? '' : rockResult.unresolved.join('; '));
+
+  const riverState = stateAt('2', 'river');
+  const riverAction = availableActions(riverState, actorId, graph, undefined, content).find(({ id }) => id === 'surface:river-exploration');
+  assert.ok(riverAction, 'river terrain should allow exploration even when the Node is absent from the original action crosswalk');
+  const riverResult = settleNextAction(riverState, { actorId, actionId: riverAction.id, timeCostT: riverAction.costT, payload: riverAction.payload }, graph, undefined, content);
+  assert.equal(riverResult.ok, true, riverResult.ok ? '' : riverResult.unresolved.join('; '));
+
+  const dayDiveState = stateAt('2', 'river');
+  assert.equal(availableActions(dayDiveState, actorId, graph, undefined, content).some(({ id }) => id === 'surface:night-river-dive'), false);
+  const forgedDayDive = settleNextAction(dayDiveState, { actorId, actionId: 'surface:night-river-dive', timeCostT: 3, payload: { surfaceAction: 'night-river-dive' } }, graph, undefined, content);
+  assert.equal(forgedDayDive.ok, false, 'server settlement must reject a forged daytime dive');
+
+  const nightDiveState = stateAt('2', 'river', 48);
+  const nightDive = availableActions(nightDiveState, actorId, graph, undefined, content).find(({ id }) => id === 'surface:night-river-dive');
+  assert.ok(nightDive, 'night river diving should be available on any river terrain Node at night');
+  const nightDiveResult = settleNextAction(nightDiveState, { actorId, actionId: nightDive.id, timeCostT: nightDive.costT, payload: nightDive.payload }, graph, undefined, content);
+  assert.equal(nightDiveResult.ok, true, nightDiveResult.ok ? '' : nightDiveResult.unresolved.join('; '));
+
+  const beachState = stateAt('2', 'beach');
+  assert.equal(availableActions(beachState, actorId, graph, undefined, content).some(({ id }) => id === 'surface:rock-exploration' || id === 'surface:river-exploration' || id === 'surface:night-river-dive'), false);
+  const forgedRock = settleNextAction(beachState, { actorId, actionId: 'surface:rock-exploration', timeCostT: 3, payload: { surfaceAction: 'rock-exploration' } }, graph, undefined, content);
+  assert.equal(forgedRock.ok, false);
+});
+
 test('rolls forest entry and creates a source-matched monster only on the 3T arrival', async () => {
   const graph = await loadIslandGraph(sourceTables);
   const initial = createInitialWorld(graph, { seed: 'forest-arrival-encounter', contentVersion: 'archive-01669CAC' });

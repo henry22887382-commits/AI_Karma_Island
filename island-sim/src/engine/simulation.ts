@@ -37,12 +37,15 @@ function surfaceActionAvailableAtNode(
   nodeId: string,
   state: WorldState,
   capabilities: ActiveSurfaceCapabilities,
+  phase: 'day' | 'night',
 ): boolean {
-  if (!capabilities.nodeIdsByAction[action].includes(nodeId)) return false;
   const terrain = state.nodes[nodeId]?.surfaceTerrain;
+  if (action === 'rock-exploration') return terrain === 'rock';
+  if (action === 'river-exploration') return terrain === 'river';
+  if (action === 'night-river-dive') return terrain === 'river' && phase === 'night';
+  if (!capabilities.nodeIdsByAction[action].includes(nodeId)) return false;
   if (action === 'fishing') return terrain === 'port';
   if (action === 'forest-berry-gather') return terrain === 'berry-forest';
-  if (action === 'rock-exploration') return terrain === 'rock';
   return terrain === 'river';
 }
 
@@ -274,12 +277,12 @@ export function availableActions(state: WorldState, actorId: string, graph: Isla
       ['river-exploration', 'river-exploration', '河流探索'],
     ];
     for (const [capability, surfaceAction, label] of nodeActions) {
-      const availableHere = surfaceActionAvailableAtNode(surfaceAction, actor.nodeId, state, capabilities);
+      const availableHere = surfaceActionAvailableAtNode(surfaceAction, actor.nodeId, state, capabilities, dayPhaseAt(decisionTimeT));
       if (availableHere) {
         actions.push({ id: `surface:${surfaceAction}`, type: 'surface', name: label, costT: 3, requiresText: false, payload: { surfaceAction }, payloadSchemaKey: 'surface-action' });
       }
     }
-    if (dayPhaseAt(decisionTimeT) === 'night' && surfaceActionAvailableAtNode('night-river-dive', actor.nodeId, state, capabilities)) {
+    if (surfaceActionAvailableAtNode('night-river-dive', actor.nodeId, state, capabilities, dayPhaseAt(decisionTimeT))) {
       actions.push({ id: 'surface:night-river-dive', type: 'surface', name: '夜間河流潛水', costT: 3, requiresText: false, payload: { surfaceAction: 'night-river-dive' }, payloadSchemaKey: 'surface-action' });
     }
     if (capabilities.nodeIdsByAction['coconut-harvest'].includes(actor.nodeId) && (state.surfaceStocks?.byNode[actor.nodeId] ?? 0) > 0) {
@@ -767,7 +770,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
       return { ok: false, state, unresolved: ['Surface action requires the active node crosswalk and complete source action tables.'] };
     }
     if (!isSurfaceAction(surfaceAction)) return { ok: false, state, unresolved: [`Unsupported surface action ${surfaceAction}.`] };
-    if (!surfaceActionAvailableAtNode(surfaceAction, nodeId, state, actionContent.capabilities)) {
+    if (!surfaceActionAvailableAtNode(surfaceAction, nodeId, state, actionContent.capabilities, dayPhaseAt(schedule.timeT))) {
       return { ok: false, state, unresolved: [`${surfaceAction} is not available at Node ${nodeId} in the active map profile.`] };
     }
     const tables: SurfaceTables = {
@@ -790,7 +793,7 @@ function settleNextActionCore(state: WorldState, proposal: ActionProposal, graph
       nodeId,
       worldTimeT: schedule.timeT,
       phase: dayPhaseAt(schedule.timeT),
-      actionAvailableAtNode: surfaceActionAvailableAtNode(surfaceAction, nodeId, state, actionContent.capabilities),
+      actionAvailableAtNode: surfaceActionAvailableAtNode(surfaceAction, nodeId, state, actionContent.capabilities, dayPhaseAt(schedule.timeT)),
       randomState: schedule.rngState,
       tables,
       existingUniqueItems,
